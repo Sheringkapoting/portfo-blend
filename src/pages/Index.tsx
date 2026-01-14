@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase } from 'lucide-react';
+import { useMemo } from 'react';
+import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database } from 'lucide-react';
 import { DashboardHeader } from '@/components/portfolio/DashboardHeader';
 import { StatCard } from '@/components/portfolio/StatCard';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
 import { AllocationChart } from '@/components/portfolio/AllocationChart';
+import { DataSourcePanel } from '@/components/portfolio/DataSourcePanel';
+import { usePortfolioData } from '@/hooks/usePortfolioData';
 import { sampleHoldings } from '@/data/sampleHoldings';
 import { 
   enrichHolding, 
@@ -14,16 +15,29 @@ import {
   calculateSourceAllocation
 } from '@/lib/portfolioUtils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const Index = () => {
-  const [lastUpdated] = useState(new Date());
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const {
+    holdings: liveHoldings,
+    isLoading,
+    isSyncing,
+    lastSync,
+    syncStatus,
+    syncZerodha,
+    uploadINDMoneyExcel,
+    refetch,
+  } = usePortfolioData();
 
-  // Enrich holdings with calculated values
-  const enrichedHoldings = useMemo(() => 
-    sampleHoldings.map(enrichHolding),
-    []
-  );
+  // Use live holdings if available, otherwise fall back to sample data
+  const enrichedHoldings = useMemo(() => {
+    if (liveHoldings.length > 0) {
+      return liveHoldings;
+    }
+    return sampleHoldings.map(enrichHolding);
+  }, [liveHoldings]);
+
+  const isLive = liveHoldings.length > 0;
 
   // Calculate portfolio summary
   const summary = useMemo(() => 
@@ -47,21 +61,36 @@ const Index = () => {
     [enrichedHoldings]
   );
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 1500);
+  const handleRefresh = async () => {
+    await refetch();
   };
 
   const isProfitable = summary.totalPnl >= 0;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8 max-w-7xl space-y-6">
+          <Skeleton className="h-16 w-full" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+          </div>
+          <Skeleton className="h-96" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <DashboardHeader 
-          lastUpdated={lastUpdated}
-          isLive={false}
+          lastUpdated={lastSync || new Date()}
+          isLive={isLive}
           onRefresh={handleRefresh}
-          isRefreshing={isRefreshing}
+          isRefreshing={isSyncing}
         />
 
         {/* Summary Stats */}
@@ -102,6 +131,10 @@ const Index = () => {
               <BarChart3 className="h-4 w-4" />
               Allocation
             </TabsTrigger>
+            <TabsTrigger value="sources" className="gap-2 data-[state=active]:bg-card">
+              <Database className="h-4 w-4" />
+              Data Sources
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="holdings" className="mt-6">
@@ -130,17 +163,27 @@ const Index = () => {
               />
             </div>
           </TabsContent>
+
+          <TabsContent value="sources" className="mt-6">
+            <DataSourcePanel
+              onSyncZerodha={syncZerodha}
+              onUploadINDMoney={uploadINDMoneyExcel}
+              isSyncing={isSyncing}
+              syncStatus={syncStatus}
+              lastSync={lastSync}
+            />
+          </TabsContent>
         </Tabs>
 
         {/* Footer */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.5 }}
-          className="mt-12 text-center text-sm text-muted-foreground"
-        >
-          <p>Data from Zerodha & INDMoney • Last synced: {lastUpdated.toLocaleDateString('en-IN')}</p>
-        </motion.div>
+        <div className="mt-12 text-center text-sm text-muted-foreground">
+          <p>
+            {isLive 
+              ? `Live data from ${sourceAllocation.map(s => s.source).join(' & ')} • Last synced: ${lastSync?.toLocaleDateString('en-IN')}`
+              : 'Sample data • Connect your accounts in Data Sources tab'
+            }
+          </p>
+        </div>
       </div>
     </div>
   );

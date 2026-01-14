@@ -14,7 +14,114 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      holdings: {
+        Row: {
+          avg_price: number
+          created_at: string
+          exchange: string
+          id: string
+          isin: string | null
+          ltp: number
+          name: string
+          quantity: number
+          sector: string
+          source: string
+          symbol: string
+          type: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          avg_price: number
+          created_at?: string
+          exchange: string
+          id?: string
+          isin?: string | null
+          ltp: number
+          name: string
+          quantity: number
+          sector: string
+          source: string
+          symbol: string
+          type: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          avg_price?: number
+          created_at?: string
+          exchange?: string
+          id?: string
+          isin?: string | null
+          ltp?: number
+          name?: string
+          quantity?: number
+          sector?: string
+          source?: string
+          symbol?: string
+          type?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      quotes_cache: {
+        Row: {
+          change_percent: number | null
+          fetched_at: string
+          id: string
+          ltp: number
+          source: string
+          symbol: string
+          volume: number | null
+        }
+        Insert: {
+          change_percent?: number | null
+          fetched_at?: string
+          id?: string
+          ltp: number
+          source: string
+          symbol: string
+          volume?: number | null
+        }
+        Update: {
+          change_percent?: number | null
+          fetched_at?: string
+          id?: string
+          ltp?: number
+          source?: string
+          symbol?: string
+          volume?: number | null
+        }
+        Relationships: []
+      }
+      sync_logs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          holdings_count: number | null
+          id: string
+          source: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          holdings_count?: number | null
+          id?: string
+          source: string
+          status: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          holdings_count?: number | null
+          id?: string
+          source?: string
+          status?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
