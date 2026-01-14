@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, RefreshCw, CloudDownload, FileSpreadsheet, CheckCircle2, XCircle, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { KiteConnectCard } from './KiteConnectCard';
 
 interface SyncStatus {
   source: string;
@@ -73,54 +73,12 @@ export function DataSourcePanel({
       transition={{ duration: 0.4 }}
       className="grid grid-cols-1 md:grid-cols-2 gap-6"
     >
-      {/* Zerodha Sync Card */}
-      <Card className="border-border bg-card/50 backdrop-blur-sm">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-orange-500/10">
-                <CloudDownload className="h-5 w-5 text-orange-500" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Zerodha Kite</CardTitle>
-                <CardDescription>Sync holdings via Kite API</CardDescription>
-              </div>
-            </div>
-            <StatusBadge status={zerodhaStatus} />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {zerodhaStatus && (
-              <div className="text-sm text-muted-foreground">
-                {zerodhaStatus.status === 'success' ? (
-                  <span className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-profit" />
-                    {zerodhaStatus.holdings_count} holdings synced
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2 text-loss">
-                    <XCircle className="h-4 w-4" />
-                    {zerodhaStatus.error_message}
-                  </span>
-                )}
-              </div>
-            )}
-            <Button
-              onClick={onSyncZerodha}
-              disabled={isSyncing}
-              className="w-full bg-orange-500 hover:bg-orange-600"
-            >
-              {isSyncing ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Sync from Zerodha
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Zerodha Kite Connect Card */}
+      <KiteConnectCard
+        onSyncZerodha={onSyncZerodha}
+        isSyncing={isSyncing}
+        zerodhaStatus={zerodhaStatus}
+      />
 
       {/* INDMoney Upload Card */}
       <Card className="border-border bg-card/50 backdrop-blur-sm">
