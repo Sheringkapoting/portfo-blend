@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion';
-import { RefreshCcw, Clock, Wifi, WifiOff, Database } from 'lucide-react';
+import { RefreshCcw, Clock, Wifi, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { UserMenu } from './UserMenu';
 
 interface DashboardHeaderProps {
   lastUpdated?: Date;
@@ -81,6 +82,9 @@ export function DashboardHeader({
           )} />
           <span className="hidden sm:inline">Refresh</span>
         </Button>
+
+        {/* User Menu */}
+        <UserMenu />
       </div>
     </motion.div>
   );

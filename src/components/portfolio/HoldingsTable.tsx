@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, Fragment } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   useReactTable,
@@ -9,9 +9,8 @@ import {
   flexRender,
   SortingState,
   ColumnDef,
-  Row,
 } from '@tanstack/react-table';
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, Filter, ChevronRight, ChevronDown, Layers, X, GripVertical, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, Filter, ChevronRight, Layers, X, GripVertical, Maximize2, Minimize2, Loader2 } from 'lucide-react';
 import { EnrichedHolding } from '@/types/portfolio';
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/portfolioUtils';
 import { SourceBadge } from './SourceBadge';
@@ -27,6 +26,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useTableGrouping } from '@/hooks/useTableGrouping';
+
+const ITEMS_PER_PAGE = 15;
 
 interface HoldingsTableProps {
   holdings: EnrichedHolding[];
@@ -57,6 +58,12 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [draggedColumn, setDraggedColumn] = useState<string | null>(null);
+  
+  // Infinite scroll state
+  const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const {
     groupBy,
@@ -79,6 +86,56 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
     }
     return data;
   }, [holdings, typeFilter, sourceFilter]);
+
+  // Infinite scroll: items to display
+  const hasMore = displayCount < filteredData.length;
+  const displayedData = useMemo(() => {
+    if (groupBy.length > 0) return filteredData; // No pagination when grouped
+    return filteredData.slice(0, displayCount);
+  }, [filteredData, displayCount, groupBy.length]);
+
+  // Reset display count when filters change
+  useEffect(() => {
+    setDisplayCount(ITEMS_PER_PAGE);
+  }, [typeFilter, sourceFilter, globalFilter]);
+
+  // Load more handler
+  const loadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore || groupBy.length > 0) return;
+    
+    setIsLoadingMore(true);
+    loadTimeoutRef.current = setTimeout(() => {
+      setDisplayCount(prev => Math.min(prev + ITEMS_PER_PAGE, filteredData.length));
+      setIsLoadingMore(false);
+    }, 300);
+  }, [isLoadingMore, hasMore, filteredData.length, groupBy.length]);
+
+  // Scroll handler for infinite scroll
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+      if (distanceFromBottom < 100 && hasMore && !isLoadingMore && groupBy.length === 0) {
+        loadMore();
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [hasMore, isLoadingMore, loadMore, groupBy.length]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Group data hierarchically
   const groupedData = useMemo(() => {
@@ -408,7 +465,7 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
   ], [groupBy]);
 
   const table = useReactTable({
-    data: filteredData,
+    data: displayedData,
     columns,
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
@@ -726,10 +783,13 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
+      {/* Table with scrollable container */}
+      <div 
+        ref={scrollContainerRef}
+        className="overflow-auto max-h-[600px]"
+      >
         <table className="w-full">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-card">
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id} className="border-b border-border bg-muted/30">
                 {headerGroup.headers.map(header => (
@@ -754,7 +814,7 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
                   key={row.id}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.2, delay: index * 0.02 }}
+                  transition={{ duration: 0.2, delay: Math.min(index * 0.02, 0.3) }}
                   className="border-b border-border/50 table-row-hover"
                 >
                   {row.getVisibleCells().map(cell => (
@@ -767,14 +827,44 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
             )}
           </tbody>
         </table>
+
+        {/* Loading indicator */}
+        {isLoadingMore && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center justify-center py-4 gap-2 text-muted-foreground"
+          >
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Loading more...</span>
+          </motion.div>
+        )}
       </div>
       
       {/* Table Footer */}
-      <div className="p-4 border-t border-border bg-muted/20">
+      <div className="p-4 border-t border-border bg-muted/20 flex items-center justify-between">
         <span className="text-sm text-muted-foreground">
-          Showing {table.getRowModel().rows.length} of {holdings.length} holdings
+          Showing {displayedData.length} of {filteredData.length} holdings
           {groupBy.length > 0 && ` (grouped by ${groupBy.map(g => COLUMN_LABELS[g]).join(' → ')})`}
         </span>
+        {hasMore && groupBy.length === 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={loadMore}
+            disabled={isLoadingMore}
+            className="text-xs"
+          >
+            {isLoadingMore ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                Loading...
+              </>
+            ) : (
+              `Load more (${filteredData.length - displayedData.length} remaining)`
+            )}
+          </Button>
+        )}
       </div>
     </motion.div>
   );
