@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Calendar, ArrowUpRight, ArrowDownRight, Camera } from 'lucide-react';
+import { TrendingUp, TrendingDown, Calendar, ArrowUpRight, ArrowDownRight, Camera, Clock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { Area, AreaChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts';
+import { Area, AreaChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency, formatPercent } from '@/lib/portfolioUtils';
 import { toast } from 'sonner';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 interface Snapshot {
   id: string;
@@ -19,6 +20,8 @@ interface Snapshot {
   pnl_percent: number;
   holdings_count: number;
 }
+
+type DateRange = '7d' | '30d' | '90d' | 'all';
 
 const chartConfig = {
   current_value: {
@@ -35,6 +38,7 @@ export function PortfolioAnalytics() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRange>('30d');
 
   useEffect(() => {
     fetchSnapshots();
@@ -46,7 +50,7 @@ export function PortfolioAnalytics() {
         .from('portfolio_snapshots')
         .select('*')
         .order('snapshot_date', { ascending: true })
-        .limit(90); // Last 90 days
+        .limit(365); // Fetch up to 1 year of data
 
       if (error) throw error;
       setSnapshots(data || []);
@@ -78,34 +82,54 @@ export function PortfolioAnalytics() {
     }
   };
 
+  const filteredSnapshots = useMemo(() => {
+    if (dateRange === 'all') return snapshots;
+    
+    const days = dateRange === '7d' ? 7 : dateRange === '30d' ? 30 : 90;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    
+    return snapshots.filter(s => new Date(s.snapshot_date) >= cutoff);
+  }, [snapshots, dateRange]);
+
   const chartData = useMemo(() => {
-    return snapshots.map(s => ({
+    return filteredSnapshots.map(s => ({
       date: new Date(s.snapshot_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+      fullDate: s.snapshot_date,
       current_value: Number(s.current_value),
       total_investment: Number(s.total_investment),
       pnl: Number(s.total_pnl),
       pnl_percent: Number(s.pnl_percent),
     }));
-  }, [snapshots]);
+  }, [filteredSnapshots]);
 
   const stats = useMemo(() => {
-    if (snapshots.length === 0) return null;
+    if (filteredSnapshots.length === 0) return null;
     
-    const latest = snapshots[snapshots.length - 1];
-    const oldest = snapshots[0];
+    const latest = filteredSnapshots[filteredSnapshots.length - 1];
+    const oldest = filteredSnapshots[0];
     
     const periodPnl = Number(latest.current_value) - Number(oldest.current_value);
     const periodPnlPercent = Number(oldest.current_value) > 0 
       ? (periodPnl / Number(oldest.current_value)) * 100 
       : 0;
+
+    // Calculate max and min values for the period
+    const values = filteredSnapshots.map(s => Number(s.current_value));
+    const maxValue = Math.max(...values);
+    const minValue = Math.min(...values);
+    const volatility = ((maxValue - minValue) / minValue) * 100;
     
     return {
       latest,
       periodPnl,
       periodPnlPercent,
-      daysTracked: snapshots.length,
+      daysTracked: filteredSnapshots.length,
+      maxValue,
+      minValue,
+      volatility,
     };
-  }, [snapshots]);
+  }, [filteredSnapshots]);
 
   if (isLoading) {
     return (
@@ -129,13 +153,13 @@ export function PortfolioAnalytics() {
     >
       {/* Stats Row */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="border-border bg-card/50">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Current Value</p>
-                  <p className="text-2xl font-bold">{formatCurrency(Number(stats.latest.current_value), true)}</p>
+                  <p className="text-2xl font-bold font-mono-numbers">{formatCurrency(Number(stats.latest.current_value), true)}</p>
                 </div>
                 <div className="p-2 rounded-lg bg-primary/10">
                   <TrendingUp className="h-5 w-5 text-primary" />
@@ -149,7 +173,7 @@ export function PortfolioAnalytics() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total P&L</p>
-                  <p className={`text-2xl font-bold ${Number(stats.latest.total_pnl) >= 0 ? 'text-profit' : 'text-loss'}`}>
+                  <p className={`text-2xl font-bold font-mono-numbers ${Number(stats.latest.total_pnl) >= 0 ? 'text-profit' : 'text-loss'}`}>
                     {formatCurrency(Number(stats.latest.total_pnl), true)}
                   </p>
                   <p className={`text-sm ${Number(stats.latest.pnl_percent) >= 0 ? 'text-profit' : 'text-loss'}`}>
@@ -172,15 +196,34 @@ export function PortfolioAnalytics() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Period Change</p>
-                  <p className={`text-2xl font-bold ${stats.periodPnl >= 0 ? 'text-profit' : 'text-loss'}`}>
-                    {formatCurrency(stats.periodPnl, true)}
+                  <p className={`text-2xl font-bold font-mono-numbers ${stats.periodPnl >= 0 ? 'text-profit' : 'text-loss'}`}>
+                    {stats.periodPnl >= 0 ? '+' : ''}{formatPercent(stats.periodPnlPercent)}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {stats.daysTracked} days tracked
+                    {stats.daysTracked} days
                   </p>
                 </div>
                 <div className="p-2 rounded-lg bg-muted">
                   <Calendar className="h-5 w-5 text-muted-foreground" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border bg-card/50">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">High / Low</p>
+                  <p className="text-lg font-bold font-mono-numbers text-profit">
+                    {formatCurrency(stats.maxValue, true)}
+                  </p>
+                  <p className="text-sm font-mono-numbers text-loss">
+                    {formatCurrency(stats.minValue, true)}
+                  </p>
+                </div>
+                <div className="p-2 rounded-lg bg-muted">
+                  <TrendingDown className="h-5 w-5 text-muted-foreground" />
                 </div>
               </div>
             </CardContent>
@@ -191,25 +234,39 @@ export function PortfolioAnalytics() {
       {/* Chart */}
       <Card className="border-border bg-card/50 backdrop-blur-sm">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <CardTitle>Portfolio Performance</CardTitle>
-              <CardDescription>
+              <CardDescription className="flex items-center gap-2 mt-1">
+                <Clock className="h-3 w-3" />
                 {snapshots.length > 0 
-                  ? `Tracking ${snapshots.length} days of history`
+                  ? `Auto-captures daily at 3:30 PM IST`
                   : 'Start tracking your portfolio performance'
                 }
               </CardDescription>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={captureSnapshot}
-              disabled={isCapturing}
-            >
-              <Camera className="h-4 w-4 mr-2" />
-              {isCapturing ? 'Capturing...' : 'Capture Today'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <ToggleGroup 
+                type="single" 
+                value={dateRange} 
+                onValueChange={(value) => value && setDateRange(value as DateRange)}
+                className="bg-muted/50 p-1 rounded-lg"
+              >
+                <ToggleGroupItem value="7d" size="sm" className="text-xs px-3">7D</ToggleGroupItem>
+                <ToggleGroupItem value="30d" size="sm" className="text-xs px-3">30D</ToggleGroupItem>
+                <ToggleGroupItem value="90d" size="sm" className="text-xs px-3">90D</ToggleGroupItem>
+                <ToggleGroupItem value="all" size="sm" className="text-xs px-3">All</ToggleGroupItem>
+              </ToggleGroup>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={captureSnapshot}
+                disabled={isCapturing}
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                {isCapturing ? 'Capturing...' : 'Capture Now'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
