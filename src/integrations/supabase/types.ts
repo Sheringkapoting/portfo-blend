@@ -155,6 +155,53 @@ export type Database = {
         }
         Relationships: []
       }
+      snapshot_source_details: {
+        Row: {
+          asset_type: string | null
+          created_at: string | null
+          current_value: number | null
+          holdings_count: number | null
+          id: string
+          last_sync_at: string | null
+          snapshot_id: string | null
+          source: string
+          total_investment: number | null
+          total_pnl: number | null
+        }
+        Insert: {
+          asset_type?: string | null
+          created_at?: string | null
+          current_value?: number | null
+          holdings_count?: number | null
+          id?: string
+          last_sync_at?: string | null
+          snapshot_id?: string | null
+          source: string
+          total_investment?: number | null
+          total_pnl?: number | null
+        }
+        Update: {
+          asset_type?: string | null
+          created_at?: string | null
+          current_value?: number | null
+          holdings_count?: number | null
+          id?: string
+          last_sync_at?: string | null
+          snapshot_id?: string | null
+          source?: string
+          total_investment?: number | null
+          total_pnl?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "snapshot_source_details_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_logs: {
         Row: {
           created_at: string
