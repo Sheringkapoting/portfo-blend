@@ -47,14 +47,16 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
         .from('kite_sessions')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
-      if (!error && data) {
-        setSession(data);
+      if (!error && data && data.length > 0) {
+        setSession(data[0]);
+      } else {
+        setSession(null);
       }
     } catch (e) {
-      // No session found
+      console.error('Error fetching Kite session:', e);
+      setSession(null);
     } finally {
       setIsLoading(false);
     }
