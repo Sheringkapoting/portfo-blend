@@ -17,6 +17,21 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    
+    // Security: Verify request is from authorized source
+    // Accept service role auth header OR cron secret for external schedulers
+    const authHeader = req.headers.get('authorization')
+    const cronSecret = Deno.env.get('CRON_SECRET')
+    const providedCronSecret = req.headers.get('x-cron-secret')
+    
+    const isValidCronSecret = cronSecret && providedCronSecret === cronSecret
+    
+    if (!authHeader && !isValidCronSecret) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: Missing authorization' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // Check if we have a valid Kite session to refresh quotes first
