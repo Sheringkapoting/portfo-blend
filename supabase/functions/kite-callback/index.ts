@@ -151,6 +151,24 @@ Deno.serve(async (req) => {
       holdings_count: 0,
     })
 
+    // Trigger immediate sync of holdings
+    try {
+      const syncResponse = await fetch(`${supabaseUrl}/functions/v1/zerodha-sync`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+      })
+      if (syncResponse.ok) {
+        console.log('Holdings sync triggered successfully after OAuth')
+      } else {
+        console.error('Holdings sync trigger failed:', await syncResponse.text())
+      }
+    } catch (syncError) {
+      console.error('Failed to trigger holdings sync:', syncError)
+    }
+
     return new Response(
       JSON.stringify({ success: true, message: 'Connected to Zerodha successfully' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.parse-indmoney]
 verify_jwt = false
+
+[functions.scheduled-snapshot]
+verify_jwt = false
