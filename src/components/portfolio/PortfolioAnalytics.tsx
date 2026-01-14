@@ -1,15 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Calendar, ArrowUpRight, ArrowDownRight, Camera, Clock } from 'lucide-react';
+import { TrendingUp, TrendingDown, Calendar, ArrowUpRight, ArrowDownRight, Camera, Clock, Database, Layers } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { Area, AreaChart, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, Tooltip } from 'recharts';
+import { Area, AreaChart, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency, formatPercent } from '@/lib/portfolioUtils';
 import { toast } from 'sonner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { SourceBreakdownChart } from './SourceBreakdownChart';
+import { CaptureModal } from './CaptureModal';
+import { DataFreshnessIndicator, MultiSourceFreshness } from './DataFreshnessIndicator';
 
 interface Snapshot {
   id: string;
@@ -19,6 +22,18 @@ interface Snapshot {
   total_pnl: number;
   pnl_percent: number;
   holdings_count: number;
+}
+
+interface SourceDetail {
+  id: string;
+  snapshot_id: string;
+  source: string;
+  asset_type: string | null;
+  total_investment: number;
+  current_value: number;
+  total_pnl: number;
+  holdings_count: number;
+  last_sync_at: string | null;
 }
 
 type DateRange = '7d' | '30d' | '90d' | 'all';
@@ -36,12 +51,16 @@ const chartConfig = {
 
 export function PortfolioAnalytics() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [sourceDetails, setSourceDetails] = useState<SourceDetail[]>([]);
+  const [availableSources, setAvailableSources] = useState<{ source: string; count: number }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCapturing, setIsCapturing] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange>('30d');
+  const [showCaptureModal, setShowCaptureModal] = useState(false);
 
   useEffect(() => {
     fetchSnapshots();
+    fetchAvailableSources();
   }, []);
 
   const fetchSnapshots = async () => {
@@ -50,14 +69,47 @@ export function PortfolioAnalytics() {
         .from('portfolio_snapshots')
         .select('*')
         .order('snapshot_date', { ascending: true })
-        .limit(365); // Fetch up to 1 year of data
+        .limit(365);
 
       if (error) throw error;
       setSnapshots(data || []);
+
+      // Fetch source details for the latest snapshot
+      if (data && data.length > 0) {
+        const latestSnapshot = data[data.length - 1];
+        const { data: details } = await supabase
+          .from('snapshot_source_details')
+          .select('*')
+          .eq('snapshot_id', latestSnapshot.id);
+        
+        setSourceDetails((details as SourceDetail[]) || []);
+      }
     } catch (error) {
       console.error('Error fetching snapshots:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchAvailableSources = async () => {
+    try {
+      const { data } = await supabase
+        .from('holdings')
+        .select('source');
+      
+      if (data) {
+        const sourceCounts = data.reduce((acc, h) => {
+          const source = h.source || 'Unknown';
+          acc[source] = (acc[source] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        setAvailableSources(
+          Object.entries(sourceCounts).map(([source, count]) => ({ source, count }))
+        );
+      }
+    } catch (error) {
+      console.error('Error fetching sources:', error);
     }
   };
 
@@ -114,7 +166,6 @@ export function PortfolioAnalytics() {
       ? (periodPnl / Number(oldest.current_value)) * 100 
       : 0;
 
-    // Calculate max and min values for the period
     const values = filteredSnapshots.map(s => Number(s.current_value));
     const maxValue = Math.max(...values);
     const minValue = Math.min(...values);
@@ -130,6 +181,14 @@ export function PortfolioAnalytics() {
       volatility,
     };
   }, [filteredSnapshots]);
+
+  // Calculate source freshness for display
+  const sourceFreshness = useMemo(() => {
+    return sourceDetails.map(d => ({
+      source: d.source,
+      lastSyncAt: d.last_sync_at,
+    }));
+  }, [sourceDetails]);
 
   if (isLoading) {
     return (
@@ -151,6 +210,27 @@ export function PortfolioAnalytics() {
       transition={{ duration: 0.4 }}
       className="space-y-6"
     >
+      {/* Source Data Freshness */}
+      {sourceFreshness.length > 0 && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Data Sources:</span>
+            <MultiSourceFreshness sources={sourceFreshness} />
+          </div>
+          <div className="flex items-center gap-2">
+            {availableSources.map(({ source }) => (
+              <DataFreshnessIndicator
+                key={source}
+                source={source}
+                lastSyncAt={sourceDetails.find(d => d.source === source)?.last_sync_at || null}
+                size="sm"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Stats Row */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -160,6 +240,11 @@ export function PortfolioAnalytics() {
                 <div>
                   <p className="text-sm text-muted-foreground">Current Value</p>
                   <p className="text-2xl font-bold font-mono-numbers">{formatCurrency(Number(stats.latest.current_value), true)}</p>
+                  {sourceDetails.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {sourceDetails.length} source{sourceDetails.length > 1 ? 's' : ''}
+                    </p>
+                  )}
                 </div>
                 <div className="p-2 rounded-lg bg-primary/10">
                   <TrendingUp className="h-5 w-5 text-primary" />
@@ -231,12 +316,25 @@ export function PortfolioAnalytics() {
         </div>
       )}
 
-      {/* Chart */}
+      {/* Source Breakdown Charts */}
+      {sourceDetails.length > 0 && (
+        <SourceBreakdownChart sourceDetails={sourceDetails} />
+      )}
+
+      {/* Main Chart */}
       <Card className="border-border bg-card/50 backdrop-blur-sm">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <CardTitle>Portfolio Performance</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                Portfolio Performance
+                {sourceDetails.length > 1 && (
+                  <Badge variant="outline" className="ml-2 text-xs">
+                    <Layers className="h-3 w-3 mr-1" />
+                    Multi-source
+                  </Badge>
+                )}
+              </CardTitle>
               <CardDescription className="flex items-center gap-2 mt-1">
                 <Clock className="h-3 w-3" />
                 {snapshots.length > 0 
@@ -260,7 +358,7 @@ export function PortfolioAnalytics() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={captureSnapshot}
+                onClick={() => setShowCaptureModal(true)}
                 disabled={isCapturing}
               >
                 <Camera className="h-4 w-4 mr-2" />
@@ -275,7 +373,7 @@ export function PortfolioAnalytics() {
               <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium">No snapshots yet</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Click "Capture Today" to start tracking your portfolio performance over time
+                Click "Capture Now" to start tracking your portfolio performance over time
               </p>
               <Badge variant="outline">Tip: Capture daily for best insights</Badge>
             </div>
@@ -334,6 +432,14 @@ export function PortfolioAnalytics() {
           )}
         </CardContent>
       </Card>
+
+      {/* Capture Modal */}
+      <CaptureModal
+        open={showCaptureModal}
+        onOpenChange={setShowCaptureModal}
+        onCaptureComplete={fetchSnapshots}
+        availableSources={availableSources}
+      />
     </motion.div>
   );
 }
