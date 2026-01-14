@@ -1,12 +1,17 @@
-import { useMemo } from 'react';
-import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, Layers } from 'lucide-react';
 import { DashboardHeader } from '@/components/portfolio/DashboardHeader';
 import { StatCard } from '@/components/portfolio/StatCard';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
+import { AssetClassHoldings } from '@/components/portfolio/AssetClassHoldings';
 import { AllocationChart } from '@/components/portfolio/AllocationChart';
 import { DataSourcePanel } from '@/components/portfolio/DataSourcePanel';
 import { PortfolioAnalytics } from '@/components/portfolio/PortfolioAnalytics';
+import { CacheStatusBadge } from '@/components/portfolio/CacheStatusBadge';
+import { KiteLoginModal } from '@/components/portfolio/KiteLoginModal';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
+import { usePortfolioCache } from '@/hooks/usePortfolioCache';
+import { useKiteSession } from '@/hooks/useKiteSession';
 import { sampleHoldings } from '@/data/sampleHoldings';
 import { 
   enrichHolding, 
@@ -17,6 +22,7 @@ import {
 } from '@/lib/portfolioUtils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 const Index = () => {
   const {
@@ -29,6 +35,52 @@ const Index = () => {
     uploadINDMoneyExcel,
     refetch,
   } = usePortfolioData();
+
+  const {
+    cachedSnapshot,
+    cacheTimestamp,
+    isLoadingCache,
+    isUsingCache,
+    refreshCache,
+    getCacheAge,
+  } = usePortfolioCache();
+
+  const {
+    isSessionValid,
+    loginUrl,
+    loginUrlError,
+    isLoading: isKiteLoading,
+  } = useKiteSession();
+
+  // View mode for holdings: 'grouped' (by asset class) or 'flat' (traditional table)
+  const [holdingsView, setHoldingsView] = useState<'grouped' | 'flat'>('grouped');
+
+  // Check if we should show mandatory Kite login
+  // Show it when there's no valid session and no holdings synced yet
+  const [showMandatoryLogin, setShowMandatoryLogin] = useState(false);
+  const [hasCheckedKiteOnce, setHasCheckedKiteOnce] = useState(false);
+
+  useEffect(() => {
+    // Only check once after initial load
+    if (!isKiteLoading && !isLoading && !hasCheckedKiteOnce) {
+      setHasCheckedKiteOnce(true);
+      // Show mandatory login if no valid session and no holdings
+      if (!isSessionValid && liveHoldings.length === 0) {
+        // Check if user just came back from Kite OAuth
+        const params = new URLSearchParams(window.location.search);
+        if (!params.get('kite_connected')) {
+          setShowMandatoryLogin(true);
+        }
+      }
+    }
+  }, [isKiteLoading, isLoading, isSessionValid, liveHoldings.length, hasCheckedKiteOnce]);
+
+  // Hide modal when session becomes valid
+  useEffect(() => {
+    if (isSessionValid) {
+      setShowMandatoryLogin(false);
+    }
+  }, [isSessionValid]);
 
   // Use live holdings if available, otherwise fall back to sample data
   const enrichedHoldings = useMemo(() => {
@@ -64,6 +116,7 @@ const Index = () => {
 
   const handleRefresh = async () => {
     await refetch();
+    await refreshCache();
   };
 
   const isProfitable = summary.totalPnl >= 0;
@@ -86,13 +139,34 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <DashboardHeader 
-          lastUpdated={lastSync || new Date()}
-          isLive={isLive}
-          onRefresh={handleRefresh}
-          isRefreshing={isSyncing}
+      {/* Mandatory Kite Login Modal */}
+      {showMandatoryLogin && (
+        <KiteLoginModal
+          loginUrl={loginUrl}
+          loginUrlError={loginUrlError}
+          isLoading={isKiteLoading}
         />
+      )}
+
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <div className="flex items-center justify-between mb-6">
+          <DashboardHeader 
+            lastUpdated={lastSync || new Date()}
+            isLive={isLive}
+            onRefresh={handleRefresh}
+            isRefreshing={isSyncing}
+          />
+          {/* Cache status indicator */}
+          {isUsingCache && (
+            <CacheStatusBadge
+              cacheTimestamp={cacheTimestamp}
+              getCacheAge={getCacheAge}
+              isLoadingCache={isLoadingCache}
+              isUsingCache={isUsingCache}
+              onRefresh={handleRefresh}
+            />
+          )}
+        </div>
 
         {/* Summary Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -143,7 +217,31 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="holdings" className="mt-6">
-            <HoldingsTable holdings={enrichedHoldings} />
+            {/* View toggle */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-foreground">Portfolio Holdings</h2>
+              <ToggleGroup
+                type="single"
+                value={holdingsView}
+                onValueChange={(value) => value && setHoldingsView(value as 'grouped' | 'flat')}
+                className="bg-muted/50 border border-border rounded-lg p-1"
+              >
+                <ToggleGroupItem value="grouped" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
+                  <Layers className="h-4 w-4" />
+                  By Asset Class
+                </ToggleGroupItem>
+                <ToggleGroupItem value="flat" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
+                  <Briefcase className="h-4 w-4" />
+                  All Holdings
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+
+            {holdingsView === 'grouped' ? (
+              <AssetClassHoldings holdings={enrichedHoldings} />
+            ) : (
+              <HoldingsTable holdings={enrichedHoldings} />
+            )}
           </TabsContent>
 
           <TabsContent value="allocation" className="mt-6">
@@ -189,7 +287,7 @@ const Index = () => {
           <p>
             {isLive 
               ? `Live data from ${sourceAllocation.map(s => s.source).join(' & ')} • Last synced: ${lastSync?.toLocaleDateString('en-IN')}`
-              : 'Sample data • Connect your accounts in Data Sources tab'
+              : 'Sample data • Connect your Zerodha account in Data Sources tab'
             }
           </p>
         </div>
