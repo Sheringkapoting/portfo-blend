@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
     
     if (!requestToken) {
       // Return HTML page that extracts token from URL and sends it
-      const appUrl = Deno.env.get('APP_URL') || 'https://portfo-blend.lovable.app'
+      const appUrl = Deno.env.get('APP_URL') || 'https://nlnevxvsgholniaeigst.lovableproject.com'
       return new Response(`
 <!DOCTYPE html>
 <html>
