@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database } from 'lucide-react';
+import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart } from 'lucide-react';
 import { DashboardHeader } from '@/components/portfolio/DashboardHeader';
 import { StatCard } from '@/components/portfolio/StatCard';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
 import { AllocationChart } from '@/components/portfolio/AllocationChart';
 import { DataSourcePanel } from '@/components/portfolio/DataSourcePanel';
+import { PortfolioAnalytics } from '@/components/portfolio/PortfolioAnalytics';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
 import { sampleHoldings } from '@/data/sampleHoldings';
 import { 
@@ -131,6 +132,10 @@ const Index = () => {
               <BarChart3 className="h-4 w-4" />
               Allocation
             </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-2 data-[state=active]:bg-card">
+              <LineChart className="h-4 w-4" />
+              Analytics
+            </TabsTrigger>
             <TabsTrigger value="sources" className="gap-2 data-[state=active]:bg-card">
               <Database className="h-4 w-4" />
               Data Sources
@@ -162,6 +167,10 @@ const Index = () => {
                 delay={0.3}
               />
             </div>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="mt-6">
+            <PortfolioAnalytics />
           </TabsContent>
 
           <TabsContent value="sources" className="mt-6">

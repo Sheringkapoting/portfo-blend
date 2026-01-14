@@ -1,1 +1,13 @@
 project_id = "nlnevxvsgholniaeigst"
+
+[functions.kite-callback]
+verify_jwt = false
+
+[functions.capture-snapshot]
+verify_jwt = false
+
+[functions.zerodha-sync]
+verify_jwt = false
+
+[functions.parse-indmoney]
+verify_jwt = false

@@ -65,6 +65,66 @@ export type Database = {
         }
         Relationships: []
       }
+      kite_sessions: {
+        Row: {
+          access_token: string
+          created_at: string
+          expires_at: string
+          id: string
+          token_type: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          token_type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          token_type?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      portfolio_snapshots: {
+        Row: {
+          created_at: string
+          current_value: number
+          holdings_count: number
+          id: string
+          pnl_percent: number
+          snapshot_date: string
+          total_investment: number
+          total_pnl: number
+        }
+        Insert: {
+          created_at?: string
+          current_value?: number
+          holdings_count?: number
+          id?: string
+          pnl_percent?: number
+          snapshot_date?: string
+          total_investment?: number
+          total_pnl?: number
+        }
+        Update: {
+          created_at?: string
+          current_value?: number
+          holdings_count?: number
+          id?: string
+          pnl_percent?: number
+          snapshot_date?: string
+          total_investment?: number
+          total_pnl?: number
+        }
+        Relationships: []
+      }
       quotes_cache: {
         Row: {
           change_percent: number | null

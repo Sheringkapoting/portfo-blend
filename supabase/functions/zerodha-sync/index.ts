@@ -30,16 +30,35 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get('KITE_API_KEY')
-    const accessToken = Deno.env.get('KITE_ACCESS_TOKEN')
-    
-    if (!apiKey || !accessToken) {
-      throw new Error('Kite API credentials not configured')
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
+
+    const apiKey = Deno.env.get('KITE_API_KEY')
+    
+    if (!apiKey) {
+      throw new Error('Kite API key not configured')
+    }
+
+    // Try to get access token from stored session first
+    let accessToken = ''
+    const { data: session } = await supabase
+      .from('kite_sessions')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (session && new Date(session.expires_at) > new Date()) {
+      accessToken = session.access_token
+    } else {
+      // Fall back to environment variable
+      accessToken = Deno.env.get('KITE_ACCESS_TOKEN') || ''
+    }
+    
+    if (!accessToken) {
+      throw new Error('No valid Kite session. Please connect your Zerodha account.')
+    }
 
     // Fetch holdings from Kite API
     const holdingsResponse = await fetch('https://api.kite.trade/portfolio/holdings', {
