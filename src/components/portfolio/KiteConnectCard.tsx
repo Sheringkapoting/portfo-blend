@@ -28,9 +28,12 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
   const [session, setSession] = useState<KiteSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showSetup, setShowSetup] = useState(false);
+  const [loginUrl, setLoginUrl] = useState<string | null>(null);
+  const [loginUrlError, setLoginUrlError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSession();
+    fetchLoginUrl();
     
     // Check if redirected from Kite OAuth
     const params = new URLSearchParams(window.location.search);
@@ -40,6 +43,25 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  const fetchLoginUrl = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('kite-login-url');
+      if (error) {
+        console.error('Error fetching login URL:', error);
+        setLoginUrlError('Failed to get login URL. Check API key configuration.');
+        return;
+      }
+      if (data?.loginUrl) {
+        setLoginUrl(data.loginUrl);
+      } else if (data?.error) {
+        setLoginUrlError(data.error);
+      }
+    } catch (e) {
+      console.error('Error fetching login URL:', e);
+      setLoginUrlError('Failed to connect to server.');
+    }
+  };
 
   const fetchSession = async () => {
     try {
@@ -64,14 +86,10 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
 
   const isSessionValid = session && new Date(session.expires_at) > new Date();
 
-  const getLoginUrl = () => {
-    // Use environment variable or fallback
-    const apiKey = import.meta.env.VITE_KITE_API_KEY || 'YOUR_API_KEY';
-    return `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`;
-  };
-
   const handleLogin = () => {
-    window.location.href = getLoginUrl();
+    if (loginUrl) {
+      window.location.href = loginUrl;
+    }
   };
 
   if (isLoading) {
@@ -139,20 +157,31 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
           </>
         ) : (
           <>
-            <Alert className="border-orange-500/20 bg-orange-500/5">
-              <AlertCircle className="h-4 w-4 text-orange-500" />
-              <AlertTitle className="text-sm">Daily Login Required</AlertTitle>
-              <AlertDescription className="text-xs text-muted-foreground">
-                Kite tokens expire daily. Click below to connect your Zerodha account.
-              </AlertDescription>
-            </Alert>
+            {loginUrlError ? (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle className="text-sm">Configuration Error</AlertTitle>
+                <AlertDescription className="text-xs">
+                  {loginUrlError}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert className="border-orange-500/20 bg-orange-500/5">
+                <AlertCircle className="h-4 w-4 text-orange-500" />
+                <AlertTitle className="text-sm">Daily Login Required</AlertTitle>
+                <AlertDescription className="text-xs text-muted-foreground">
+                  Kite tokens expire daily. Click below to connect your Zerodha account.
+                </AlertDescription>
+              </Alert>
+            )}
             
             <Button
               onClick={handleLogin}
-              className="w-full bg-orange-500 hover:bg-orange-600"
+              disabled={!loginUrl}
+              className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
             >
               <ExternalLink className="h-4 w-4 mr-2" />
-              Connect Zerodha
+              {loginUrl ? 'Connect Zerodha' : 'Loading...'}
             </Button>
 
             <Button

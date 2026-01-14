@@ -3,6 +3,9 @@ project_id = "nlnevxvsgholniaeigst"
 [functions.kite-callback]
 verify_jwt = false
 
+[functions.kite-login-url]
+verify_jwt = false
+
 [functions.capture-snapshot]
 verify_jwt = false
 
