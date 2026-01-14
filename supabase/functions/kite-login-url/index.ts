@@ -9,6 +9,15 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Security: Verify request has authorization
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized: Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     const apiKey = Deno.env.get('KITE_API_KEY');
     
     if (!apiKey) {
