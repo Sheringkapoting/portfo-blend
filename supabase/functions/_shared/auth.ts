@@ -52,16 +52,19 @@ export async function validateAuth(req: Request): Promise<AuthResult> {
     return { isValid: true, isCronCall: true } // Treat service role as internal call
   }
   
-  // Validate JWT using Supabase client
+  // Validate JWT using Supabase service role client
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
   
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } }
+  // Use service role client to validate the user's token
+  const supabase = createClient(supabaseUrl, supabaseServiceKey!, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    }
   })
   
   try {
-    // Use getUser to validate the token and get user info
+    // Use getUser with the token to validate it
     const { data: { user }, error } = await supabase.auth.getUser(token)
     
     console.log('Auth validation result:', { 
