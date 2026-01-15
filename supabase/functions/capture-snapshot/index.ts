@@ -1,9 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { validateAuth, unauthorizedResponse, corsHeaders } from '../_shared/auth.ts'
 
 interface CaptureOptions {
   sources?: string[]
@@ -26,27 +22,14 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Validate JWT authentication (also accepts cron secret for scheduled calls)
+    const authResult = await validateAuth(req)
+    if (!authResult.isValid) {
+      return unauthorizedResponse(authResult.error || 'Authentication failed')
+    }
+    
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
-    // Security: Verify request has valid authorization
-    // Accept either service role key in auth header OR a cron secret
-    const authHeader = req.headers.get('authorization')
-    const cronSecret = Deno.env.get('CRON_SECRET')
-    const providedCronSecret = req.headers.get('x-cron-secret')
-    
-    const isServiceRole = authHeader?.includes(supabaseKey)
-    const isValidCronSecret = cronSecret && providedCronSecret === cronSecret
-    const isFromInternalCall = authHeader?.startsWith('Bearer ') && authHeader.includes(supabaseKey)
-    
-    // For now, allow calls that have any authorization header (internal calls from other edge functions)
-    // This is more permissive but works with existing architecture
-    if (!authHeader && !isValidCronSecret) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: Missing authorization' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // Parse request body for filters
@@ -60,6 +43,11 @@ Deno.serve(async (req) => {
 
     // Build holdings query with optional filters
     let holdingsQuery = supabase.from('holdings').select('*')
+    
+    // If user is authenticated (not a cron call), scope to their data
+    if (authResult.userId && !authResult.isCronCall) {
+      holdingsQuery = holdingsQuery.eq('user_id', authResult.userId)
+    }
     
     if (options.sources && options.sources.length > 0) {
       holdingsQuery = holdingsQuery.in('source', options.sources)
@@ -147,16 +135,23 @@ Deno.serve(async (req) => {
     // Upsert snapshot for today
     const today = new Date().toISOString().split('T')[0]
     
+    const snapshotData: any = {
+      snapshot_date: today,
+      total_investment: totalInvestment,
+      current_value: currentValue,
+      total_pnl: totalPnl,
+      pnl_percent: pnlPercent,
+      holdings_count: holdings.length,
+    }
+    
+    // Add user_id if authenticated
+    if (authResult.userId) {
+      snapshotData.user_id = authResult.userId
+    }
+    
     const { data: snapshot, error: upsertError } = await supabase
       .from('portfolio_snapshots')
-      .upsert({
-        snapshot_date: today,
-        total_investment: totalInvestment,
-        current_value: currentValue,
-        total_pnl: totalPnl,
-        pnl_percent: pnlPercent,
-        holdings_count: holdings.length,
-      }, { onConflict: 'snapshot_date' })
+      .upsert(snapshotData, { onConflict: 'snapshot_date' })
       .select()
       .single()
 

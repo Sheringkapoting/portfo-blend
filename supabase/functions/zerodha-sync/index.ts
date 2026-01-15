@@ -1,9 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { validateAuth, unauthorizedResponse, corsHeaders } from '../_shared/auth.ts'
 
 interface KiteHolding {
   tradingsymbol: string
@@ -30,17 +26,14 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Validate JWT authentication
+    const authResult = await validateAuth(req)
+    if (!authResult.isValid) {
+      return unauthorizedResponse(authResult.error || 'Authentication failed')
+    }
+    
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
-    // Security: Verify request has authorization
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     const apiKey = Deno.env.get('KITE_API_KEY')
@@ -51,17 +44,23 @@ Deno.serve(async (req) => {
 
     // Try to get access token from stored session first
     let accessToken = ''
-    const { data: session } = await supabase
+    const sessionQuery = supabase
       .from('kite_sessions')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      
+    // If user is authenticated, get their session
+    if (authResult.userId) {
+      sessionQuery.eq('user_id', authResult.userId)
+    }
+    
+    const { data: session } = await sessionQuery.single()
 
     if (session && new Date(session.expires_at) > new Date()) {
       accessToken = session.access_token
     } else {
-      // Fall back to environment variable
+      // Fall back to environment variable (for backward compatibility)
       accessToken = Deno.env.get('KITE_ACCESS_TOKEN') || ''
     }
     
@@ -85,7 +84,7 @@ Deno.serve(async (req) => {
     const holdingsData = await holdingsResponse.json()
     const kiteHoldings: KiteHolding[] = holdingsData.data || []
 
-    // Map to our holdings format
+    // Map to our holdings format with user_id
     const holdings = kiteHoldings.map((h) => ({
       symbol: h.tradingsymbol,
       name: h.tradingsymbol, // Kite doesn't provide full name
@@ -97,10 +96,15 @@ Deno.serve(async (req) => {
       exchange: h.exchange,
       source: 'Zerodha',
       isin: h.isin,
+      user_id: authResult.userId || null,
     }))
 
-    // Delete existing Zerodha holdings and insert new ones
-    await supabase.from('holdings').delete().eq('source', 'Zerodha')
+    // Delete existing Zerodha holdings for this user and insert new ones
+    const deleteQuery = supabase.from('holdings').delete().eq('source', 'Zerodha')
+    if (authResult.userId) {
+      deleteQuery.eq('user_id', authResult.userId)
+    }
+    await deleteQuery
     
     if (holdings.length > 0) {
       const { error: insertError } = await supabase.from('holdings').insert(holdings)
@@ -112,6 +116,7 @@ Deno.serve(async (req) => {
       source: 'Zerodha',
       status: 'success',
       holdings_count: holdings.length,
+      user_id: authResult.userId || null,
     })
 
     // Fetch quotes for all symbols

@@ -1,37 +1,24 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { validateAuth, unauthorizedResponse, corsHeaders } from '../_shared/auth.ts'
 
 // This function can be called by:
 // 1. External cron service (cron-job.org, easycron.com, etc.)
 // 2. pg_cron (if enabled)
-// 3. Manual trigger
+// 3. Manual trigger with valid authentication
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
+    // Validate authentication (supports JWT tokens and cron secret)
+    const authResult = await validateAuth(req)
+    if (!authResult.isValid) {
+      return unauthorizedResponse(authResult.error || 'Authentication failed')
+    }
+    
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
-    // Security: Verify request is from authorized source
-    // Accept service role auth header OR cron secret for external schedulers
-    const authHeader = req.headers.get('authorization')
-    const cronSecret = Deno.env.get('CRON_SECRET')
-    const providedCronSecret = req.headers.get('x-cron-secret')
-    
-    const isValidCronSecret = cronSecret && providedCronSecret === cronSecret
-    
-    if (!authHeader && !isValidCronSecret) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: Missing authorization' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     // Check if we have a valid Kite session to refresh quotes first

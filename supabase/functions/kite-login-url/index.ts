@@ -1,52 +1,46 @@
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { validateAuth, unauthorizedResponse, corsHeaders } from '../_shared/auth.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    // Security: Verify request has authorization
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Validate JWT authentication
+    const authResult = await validateAuth(req)
+    if (!authResult.isValid) {
+      return unauthorizedResponse(authResult.error || 'Authentication failed')
     }
     
-    const apiKey = Deno.env.get('KITE_API_KEY');
+    const apiKey = Deno.env.get('KITE_API_KEY')
     
     if (!apiKey) {
-      console.error('KITE_API_KEY not configured');
+      console.error('KITE_API_KEY not configured')
       return new Response(
         JSON.stringify({ error: 'Kite API key not configured. Please add KITE_API_KEY to project secrets.' }), 
         {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
-      );
+      )
     }
 
-    const loginUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`;
+    const loginUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`
     
     return new Response(
       JSON.stringify({ loginUrl }), 
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
-    );
+    )
   } catch (error) {
-    console.error('Error generating login URL:', error);
+    console.error('Error generating login URL:', error)
     return new Response(
       JSON.stringify({ error: 'Failed to generate login URL' }), 
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
-    );
+    )
   }
-});
+})
