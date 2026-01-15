@@ -64,12 +64,20 @@ export async function validateAuth(req: Request): Promise<AuthResult> {
     // Use getUser to validate the token and get user info
     const { data: { user }, error } = await supabase.auth.getUser(token)
     
+    console.log('Auth validation result:', { 
+      hasUser: !!user, 
+      userId: user?.id, 
+      error: error?.message 
+    })
+    
     if (error || !user) {
+      console.error('Auth validation failed:', error?.message || 'No user returned')
       return { isValid: false, error: 'Invalid or expired token' }
     }
     
     return { isValid: true, userId: user.id }
   } catch (err) {
+    console.error('Token validation exception:', err)
     return { isValid: false, error: 'Token validation failed' }
   }
 }
