@@ -83,6 +83,13 @@ Deno.serve(async (req) => {
       return unauthorizedResponse(authResult.error || 'Authentication failed')
     }
     
+    console.log('Auth result:', { isValid: authResult.isValid, userId: authResult.userId, isCronCall: authResult.isCronCall })
+    
+    // Ensure we have a user ID for user-initiated uploads
+    if (!authResult.userId && !authResult.isCronCall) {
+      return unauthorizedResponse('User ID not found in token')
+    }
+    
     // Initialize Supabase client with service role for database operations
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -187,14 +194,14 @@ Deno.serve(async (req) => {
     }
 
     // Delete existing INDMoney holdings for this user and insert new ones
-    const deleteQuery = supabase
+    let deleteQuery = supabase
       .from('holdings')
       .delete()
       .eq('source', 'INDMoney')
     
     // If user is authenticated, only delete their holdings
     if (authResult.userId) {
-      deleteQuery.eq('user_id', authResult.userId)
+      deleteQuery = deleteQuery.eq('user_id', authResult.userId)
     }
     
     const { error: deleteError } = await deleteQuery
@@ -203,6 +210,8 @@ Deno.serve(async (req) => {
       console.error('Delete error:', deleteError)
       throw new Error(`Failed to clear existing holdings: ${deleteError.message}`)
     }
+    
+    console.log(`Deleted existing INDMoney holdings for user: ${authResult.userId || 'all'}`)
 
     let insertedCount = 0
     if (parseResult.holdings.length > 0) {
@@ -228,7 +237,7 @@ Deno.serve(async (req) => {
     const processingTime = Date.now() - startTime
 
     // Log the sync with detailed info
-    await supabase.from('sync_logs').insert({
+    const syncLogInsert = {
       source: 'INDMoney',
       status: 'success',
       holdings_count: insertedCount,
@@ -236,7 +245,10 @@ Deno.serve(async (req) => {
       error_message: parseResult.skipped.length > 0 
         ? `${parseResult.skipped.length} entries skipped`
         : null,
-    } as any)
+    }
+    
+    console.log('Inserting sync log:', syncLogInsert)
+    await supabase.from('sync_logs').insert(syncLogInsert as any)
 
     const response = {
       success: true,
@@ -246,6 +258,7 @@ Deno.serve(async (req) => {
       skipped_count: parseResult.skipped.length,
       processing_time_ms: processingTime,
       data_integrity: verification,
+      user_id: authResult.userId,
     }
 
     console.log('Sync completed successfully:', JSON.stringify(response, null, 2))
