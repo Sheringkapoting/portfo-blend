@@ -55,6 +55,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // Clear all portfolio caches before sign out
+    // This prevents data leakage between users on shared browsers
+    try {
+      Object.keys(localStorage)
+        .filter(key => key.startsWith('portfolio_cache'))
+        .forEach(key => localStorage.removeItem(key));
+    } catch (e) {
+      console.error('Error clearing portfolio cache:', e);
+    }
+    
     await supabase.auth.signOut();
   };
 

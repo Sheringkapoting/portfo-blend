@@ -50,27 +50,72 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Now capture the snapshot
-    const snapshotResponse = await fetch(`${supabaseUrl}/functions/v1/capture-snapshot`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Content-Type': 'application/json',
-      },
-    })
-
-    if (!snapshotResponse.ok) {
-      throw new Error(`Snapshot capture failed: ${await snapshotResponse.text()}`)
+    // Get list of all users with holdings for multi-user snapshot
+    const { data: usersWithHoldings, error: usersError } = await supabase
+      .from('holdings')
+      .select('user_id')
+      .not('user_id', 'is', null)
+    
+    if (usersError) {
+      throw new Error(`Failed to get users with holdings: ${usersError.message}`)
     }
+    
+    // Get unique user IDs
+    const uniqueUserIds = [...new Set(usersWithHoldings?.map(h => h.user_id).filter(Boolean) || [])]
+    
+    if (uniqueUserIds.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'No users with holdings found',
+          synced_holdings: syncedHoldings,
+          user_count: 0,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    
+    console.log(`Processing snapshots for ${uniqueUserIds.length} users`)
+    
+    // Capture snapshot for each user
+    const results: Array<{ user_id: string; success: boolean; data?: unknown; error?: string }> = []
+    
+    for (const userId of uniqueUserIds) {
+      try {
+        const snapshotResponse = await fetch(`${supabaseUrl}/functions/v1/capture-snapshot`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_id: userId })
+        })
 
-    const snapshotData = await snapshotResponse.json()
+        const snapshotData = await snapshotResponse.json()
+        
+        if (!snapshotResponse.ok) {
+          console.error(`Snapshot failed for user ${userId}:`, snapshotData)
+          results.push({ user_id: userId, success: false, error: snapshotData.error || 'Unknown error' })
+        } else {
+          results.push({ user_id: userId, success: true, data: snapshotData.data })
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        console.error(`Snapshot error for user ${userId}:`, errorMessage)
+        results.push({ user_id: userId, success: false, error: errorMessage })
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length
+    const failCount = results.filter(r => !r.success).length
 
     return new Response(
       JSON.stringify({
-        success: true,
-        message: 'Scheduled snapshot completed',
+        success: failCount === 0,
+        message: `Scheduled snapshot completed: ${successCount} succeeded, ${failCount} failed`,
         synced_holdings: syncedHoldings,
-        snapshot: snapshotData.data,
+        user_count: uniqueUserIds.length,
+        results,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

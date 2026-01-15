@@ -19,9 +19,12 @@ interface CacheData {
   version: string;
 }
 
-const CACHE_KEY = 'portfolio_cache';
+const CACHE_KEY_PREFIX = 'portfolio_cache_';
 const CACHE_VERSION = '1.0';
 const CACHE_TTL_HOURS = 24;
+
+// Helper function to get user-scoped cache key
+const getCacheKey = (userId: string) => `${CACHE_KEY_PREFIX}${userId}`;
 
 export function usePortfolioCache() {
   const { user } = useAuth();
@@ -32,8 +35,11 @@ export function usePortfolioCache() {
 
   // Load from localStorage first, then validate with server
   const loadFromLocalStorage = useCallback((): CacheData | null => {
+    if (!user?.id) return null;
+    
     try {
-      const cached = localStorage.getItem(CACHE_KEY);
+      const cacheKey = getCacheKey(user.id);
+      const cached = localStorage.getItem(cacheKey);
       if (!cached) return null;
 
       const data = JSON.parse(cached) as CacheData;
@@ -52,21 +58,24 @@ export function usePortfolioCache() {
       console.error('Error reading from localStorage:', e);
       return null;
     }
-  }, []);
+  }, [user?.id]);
 
-  // Save to localStorage
+  // Save to localStorage (user-scoped)
   const saveToLocalStorage = useCallback((snapshot: CachedSnapshot) => {
+    if (!user?.id) return;
+    
     try {
+      const cacheKey = getCacheKey(user.id);
       const data: CacheData = {
         snapshot,
         timestamp: new Date(),
         version: CACHE_VERSION,
       };
-      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      localStorage.setItem(cacheKey, JSON.stringify(data));
     } catch (e) {
       console.error('Error saving to localStorage:', e);
     }
-  }, []);
+  }, [user?.id]);
 
   // Fetch latest snapshot from server
   const fetchLatestSnapshot = useCallback(async () => {
@@ -136,13 +145,19 @@ export function usePortfolioCache() {
     setIsLoadingCache(false);
   }, [fetchLatestSnapshot, saveToLocalStorage]);
 
-  // Clear cache
+  // Clear cache (user-scoped)
   const clearCache = useCallback(() => {
-    localStorage.removeItem(CACHE_KEY);
+    if (user?.id) {
+      const cacheKey = getCacheKey(user.id);
+      localStorage.removeItem(cacheKey);
+    }
+    // Also clear the old static key for migration
+    localStorage.removeItem('portfolio_cache');
+    
     setCachedSnapshot(null);
     setCacheTimestamp(null);
     setIsUsingCache(false);
-  }, []);
+  }, [user?.id]);
 
   // Get cache age in human-readable format
   const getCacheAge = useCallback(() => {

@@ -4,6 +4,7 @@ import { validateAuth, unauthorizedResponse, corsHeaders } from '../_shared/auth
 interface CaptureOptions {
   sources?: string[]
   assetTypes?: string[]
+  user_id?: string
 }
 
 interface SourceStats {
@@ -41,13 +42,35 @@ Deno.serve(async (req) => {
       // No body or invalid JSON, use defaults
     }
 
-    // Build holdings query with optional filters
-    let holdingsQuery = supabase.from('holdings').select('*')
+    // Determine user ID - prioritize request body for cron calls, then auth result
+    let userId: string | undefined
     
-    // If user is authenticated (not a cron call), scope to their data
-    if (authResult.userId && !authResult.isCronCall) {
-      holdingsQuery = holdingsQuery.eq('user_id', authResult.userId)
+    if (authResult.isCronCall) {
+      // For cron/service role calls, require user_id in request body
+      userId = options.user_id
+      if (!userId) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Cron calls must specify user_id in request body' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    } else {
+      // For user calls, use the authenticated user's ID
+      userId = authResult.userId
     }
+    
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'User ID is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Build holdings query with mandatory user filter
+    let holdingsQuery = supabase.from('holdings').select('*').eq('user_id', userId)
     
     if (options.sources && options.sources.length > 0) {
       holdingsQuery = holdingsQuery.in('source', options.sources)
@@ -63,7 +86,7 @@ Deno.serve(async (req) => {
 
     if (!holdings || holdings.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, message: 'No holdings to snapshot' }),
+        JSON.stringify({ success: true, message: 'No holdings to snapshot', user_id: userId }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -75,11 +98,12 @@ Deno.serve(async (req) => {
 
     const quotesMap = new Map(quotes?.map(q => [q.symbol, q.ltp]) || [])
 
-    // Get latest sync logs per source
+    // Get latest sync logs per source for this user
     const { data: syncLogs } = await supabase
       .from('sync_logs')
       .select('source, created_at, status')
       .eq('status', 'success')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
 
     const latestSyncBySource = new Map<string, Date>()
@@ -132,30 +156,51 @@ Deno.serve(async (req) => {
     const totalPnl = currentValue - totalInvestment
     const pnlPercent = totalInvestment > 0 ? (totalPnl / totalInvestment) * 100 : 0
 
-    // Upsert snapshot for today
+    // Upsert snapshot for today with user_id
     const today = new Date().toISOString().split('T')[0]
     
-    const snapshotData: any = {
+    const snapshotData = {
       snapshot_date: today,
       total_investment: totalInvestment,
       current_value: currentValue,
       total_pnl: totalPnl,
       pnl_percent: pnlPercent,
       holdings_count: holdings.length,
+      user_id: userId, // Always set user_id
     }
     
-    // Add user_id if authenticated
-    if (authResult.userId) {
-      snapshotData.user_id = authResult.userId
-    }
-    
-    const { data: snapshot, error: upsertError } = await supabase
+    // Check if snapshot already exists for this user and date
+    const { data: existingSnapshot } = await supabase
       .from('portfolio_snapshots')
-      .upsert(snapshotData, { onConflict: 'snapshot_date' })
-      .select()
-      .single()
-
-    if (upsertError) throw upsertError
+      .select('id')
+      .eq('snapshot_date', today)
+      .eq('user_id', userId)
+      .maybeSingle()
+    
+    let snapshot
+    
+    if (existingSnapshot) {
+      // Update existing snapshot
+      const { data: updatedSnapshot, error: updateError } = await supabase
+        .from('portfolio_snapshots')
+        .update(snapshotData)
+        .eq('id', existingSnapshot.id)
+        .select()
+        .single()
+      
+      if (updateError) throw updateError
+      snapshot = updatedSnapshot
+    } else {
+      // Insert new snapshot
+      const { data: newSnapshot, error: insertError } = await supabase
+        .from('portfolio_snapshots')
+        .insert(snapshotData)
+        .select()
+        .single()
+      
+      if (insertError) throw insertError
+      snapshot = newSnapshot
+    }
 
     // Delete existing source details for this snapshot
     await supabase
@@ -209,6 +254,7 @@ Deno.serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         message: `Captured snapshot for ${today}`,
+        user_id: userId,
         data: {
           date: today,
           total_investment: totalInvestment,
