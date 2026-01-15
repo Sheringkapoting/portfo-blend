@@ -1,10 +1,18 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import * as XLSX from 'https://esm.sh/xlsx@0.18.5'
+import { validateAuth, unauthorizedResponse, corsHeaders } from '../_shared/auth.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+// Constants for file validation
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_ROWS = 10000
+const MAX_STRING_LENGTH = 500
+const MAX_PROCESSING_TIME = 30000 // 30 seconds
+const VALID_MIME_TYPES = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel', // .xls
+  'text/csv',
+  '', // Some browsers don't set MIME type for Excel files
+]
 
 interface ParsedHolding {
   symbol: string
@@ -17,6 +25,7 @@ interface ParsedHolding {
   exchange: string
   source: string
   isin?: string
+  user_id?: string
 }
 
 interface ValidationResult {
@@ -68,16 +77,13 @@ Deno.serve(async (req) => {
   let supabase: ReturnType<typeof createClient> | null = null
 
   try {
-    // Security: Verify request has authorization
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized: Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+    // Validate JWT authentication
+    const authResult = await validateAuth(req)
+    if (!authResult.isValid) {
+      return unauthorizedResponse(authResult.error || 'Authentication failed')
     }
     
-    // Initialize Supabase client
+    // Initialize Supabase client with service role for database operations
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     supabase = createClient(supabaseUrl, supabaseKey)
@@ -90,7 +96,15 @@ Deno.serve(async (req) => {
       throw new Error('No file uploaded')
     }
 
-    // Validate file type
+    // Step 1: Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      throw new Error(`File too large. Maximum ${MAX_FILE_SIZE / 1024 / 1024}MB allowed, got ${(file.size / 1024 / 1024).toFixed(2)}MB`)
+    }
+    if (file.size === 0) {
+      throw new Error('File is empty')
+    }
+
+    // Validate file type by extension
     const fileName = file.name.toLowerCase()
     const validExtensions = ['.xlsx', '.xls', '.csv']
     const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext))
@@ -99,9 +113,14 @@ Deno.serve(async (req) => {
       throw new Error(`Invalid file type. Supported formats: ${validExtensions.join(', ')}`)
     }
 
-    console.log(`Processing file: ${file.name}, size: ${file.size} bytes`)
+    // Step 2: Verify MIME type if provided
+    if (file.type && !VALID_MIME_TYPES.includes(file.type)) {
+      throw new Error(`Invalid MIME type: ${file.type}. Expected Excel or CSV file.`)
+    }
 
-    // Read and parse the file
+    console.log(`Processing file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`)
+
+    // Read and parse the file with row limit
     const arrayBuffer = await file.arrayBuffer()
     let workbook: XLSX.WorkBook
 
@@ -110,7 +129,8 @@ Deno.serve(async (req) => {
         type: 'array',
         cellDates: true,
         cellNF: true,
-        cellStyles: false 
+        cellStyles: false,
+        sheetRows: MAX_ROWS + 10 // Limit rows read to prevent memory issues (+ header rows)
       })
     } catch (parseError) {
       throw new Error(`Failed to parse file: ${parseError instanceof Error ? parseError.message : 'Invalid format'}`)
@@ -127,6 +147,14 @@ Deno.serve(async (req) => {
     const worksheet = workbook.Sheets[sheetName]
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][]
 
+    // Step 4: Validate row count
+    if (jsonData.length > MAX_ROWS) {
+      throw new Error(`Too many rows. Maximum ${MAX_ROWS} allowed, found ${jsonData.length}`)
+    }
+    if (jsonData.length === 0) {
+      throw new Error('File contains no data rows')
+    }
+
     // Find header row and parse column mapping
     const { headerRow, columnMap } = findHeaderRowAndColumns(jsonData)
     
@@ -136,8 +164,8 @@ Deno.serve(async (req) => {
 
     console.log(`Header found at row ${headerRow + 1}`)
 
-    // Parse holdings with validation
-    const parseResult = parseHoldings(jsonData, headerRow, columnMap)
+    // Parse holdings with validation and timeout protection
+    const parseResult = parseHoldings(jsonData, headerRow, columnMap, startTime, authResult.userId)
 
     console.log(`Parsing complete: ${parseResult.summary.valid_holdings} valid, ${parseResult.summary.skipped_count} skipped`)
 
@@ -158,11 +186,18 @@ Deno.serve(async (req) => {
       console.warn('Data integrity warnings:', verification.warnings)
     }
 
-    // Delete existing INDMoney holdings and insert new ones
-    const { error: deleteError } = await supabase
+    // Delete existing INDMoney holdings for this user and insert new ones
+    const deleteQuery = supabase
       .from('holdings')
       .delete()
       .eq('source', 'INDMoney')
+    
+    // If user is authenticated, only delete their holdings
+    if (authResult.userId) {
+      deleteQuery.eq('user_id', authResult.userId)
+    }
+    
+    const { error: deleteError } = await deleteQuery
 
     if (deleteError) {
       console.error('Delete error:', deleteError)
@@ -174,6 +209,11 @@ Deno.serve(async (req) => {
       // Insert in batches of 100 for large datasets
       const batchSize = 100
       for (let i = 0; i < parseResult.holdings.length; i += batchSize) {
+        // Check timeout during batch processing
+        if (Date.now() - startTime > MAX_PROCESSING_TIME) {
+          throw new Error('Processing timeout - file too complex')
+        }
+        
         const batch = parseResult.holdings.slice(i, i + batchSize)
         const { error: insertError } = await supabase.from('holdings').insert(batch as any)
         
@@ -192,6 +232,7 @@ Deno.serve(async (req) => {
       source: 'INDMoney',
       status: 'success',
       holdings_count: insertedCount,
+      user_id: authResult.userId || null,
       error_message: parseResult.skipped.length > 0 
         ? `${parseResult.skipped.length} entries skipped`
         : null,
@@ -317,9 +358,13 @@ function findHeaderRowAndColumns(data: any[][]): { headerRow: number; columnMap:
 
 /**
  * Parse number from various formats (handles commas, INR symbols, etc.)
+ * Enhanced with Infinity/NaN protection
  */
 function parseNumber(value: any): number {
-  if (typeof value === 'number') return value
+  if (typeof value === 'number') {
+    if (!isFinite(value)) return 0 // Reject Infinity/NaN
+    return value
+  }
   if (!value || value === '-' || value === 'N/A') return 0
   
   const str = String(value)
@@ -328,27 +373,38 @@ function parseNumber(value: any): number {
     .trim()
   
   const num = parseFloat(str)
-  return isNaN(num) ? 0 : num
+  return (isNaN(num) || !isFinite(num)) ? 0 : num
 }
 
 /**
- * Parse holdings from the data
+ * Parse holdings from the data with timeout protection and string length limits
  */
-function parseHoldings(data: any[][], headerRow: number, columnMap: ColumnMap): ParseResult {
+function parseHoldings(
+  data: any[][], 
+  headerRow: number, 
+  columnMap: ColumnMap,
+  startTime: number,
+  userId?: string
+): ParseResult {
   const holdings: ParsedHolding[] = []
   const skipped: { row: number; reason: string; data?: any }[] = []
   const byType: Record<string, number> = {}
 
   for (let i = headerRow + 1; i < data.length; i++) {
+    // Check for processing timeout
+    if (Date.now() - startTime > MAX_PROCESSING_TIME) {
+      throw new Error('Processing timeout - file too complex')
+    }
+    
     const row = data[i]
     if (!row || row.length === 0) continue
 
     try {
-      const assetType = String(row[columnMap.assetType] || '').trim().toUpperCase()
-      const investment = String(row[columnMap.investment] || '').trim()
-      const assetClass = String(row[columnMap.assetClass] || '').trim()
-      const category = String(row[columnMap.category] || '').trim()
-      const investmentCode = String(row[columnMap.investmentCode] || '').trim()
+      const assetType = String(row[columnMap.assetType] || '').trim().toUpperCase().slice(0, MAX_STRING_LENGTH)
+      const investment = String(row[columnMap.investment] || '').trim().slice(0, MAX_STRING_LENGTH)
+      const assetClass = String(row[columnMap.assetClass] || '').trim().slice(0, MAX_STRING_LENGTH)
+      const category = String(row[columnMap.category] || '').trim().slice(0, MAX_STRING_LENGTH)
+      const investmentCode = String(row[columnMap.investmentCode] || '').trim().slice(0, 100)
       const totalUnits = parseNumber(row[columnMap.totalUnits])
       const investedAmount = parseNumber(row[columnMap.investedAmount])
       const marketValue = parseNumber(row[columnMap.marketValue])
@@ -386,8 +442,8 @@ function parseHoldings(data: any[][], headerRow: number, columnMap: ColumnMap): 
         ltp = marketValue
       }
 
-      // Generate a symbol
-      const symbol = generateSymbol(assetType, investmentCode, investment)
+      // Generate a symbol with length limit
+      const symbol = generateSymbol(assetType, investmentCode, investment).slice(0, 100)
 
       // Create ISIN if available
       const isin = investmentCode && investmentCode.startsWith('IN') ? investmentCode : undefined
@@ -403,6 +459,7 @@ function parseHoldings(data: any[][], headerRow: number, columnMap: ColumnMap): 
         exchange,
         source: 'INDMoney',
         isin,
+        user_id: userId,
       }
 
       // Validate the holding
