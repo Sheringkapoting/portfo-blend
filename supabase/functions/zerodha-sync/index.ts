@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
     // Try to get access token from stored session first
     let accessToken = ''
-    const sessionQuery = supabase
+    let sessionQuery = supabase
       .from('kite_sessions')
       .select('*')
       .order('created_at', { ascending: false })
@@ -52,13 +52,25 @@ Deno.serve(async (req) => {
       
     // If user is authenticated, get their session
     if (authResult.userId) {
-      sessionQuery.eq('user_id', authResult.userId)
+      sessionQuery = sessionQuery.eq('user_id', authResult.userId)
     }
     
-    const { data: session } = await sessionQuery.single()
+    const { data: session, error: sessionError } = await sessionQuery.single()
+    
+    // If user-specific session not found, try to get any valid session (for migration)
+    let finalSession = session
+    if (!session && authResult.userId) {
+      const { data: anySession } = await supabase
+        .from('kite_sessions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      finalSession = anySession
+    }
 
-    if (session && new Date(session.expires_at) > new Date()) {
-      accessToken = session.access_token
+    if (finalSession && new Date(finalSession.expires_at) > new Date()) {
+      accessToken = finalSession.access_token
     } else {
       // Fall back to environment variable (for backward compatibility)
       accessToken = Deno.env.get('KITE_ACCESS_TOKEN') || ''
