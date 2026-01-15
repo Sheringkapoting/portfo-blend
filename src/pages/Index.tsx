@@ -1,9 +1,9 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, Layers } from 'lucide-react';
+import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, Layers, LayoutGrid } from 'lucide-react';
 import { DashboardHeader } from '@/components/portfolio/DashboardHeader';
 import { StatCard } from '@/components/portfolio/StatCard';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
-import { AssetClassHoldings } from '@/components/portfolio/AssetClassHoldings';
+import { TabbedHoldings } from '@/components/portfolio/TabbedHoldings';
 import { AllocationChart } from '@/components/portfolio/AllocationChart';
 import { DataSourcePanel } from '@/components/portfolio/DataSourcePanel';
 import { PortfolioAnalytics } from '@/components/portfolio/PortfolioAnalytics';
@@ -52,8 +52,8 @@ const Index = () => {
     isLoading: isKiteLoading,
   } = useKiteSession();
 
-  // View mode for holdings: 'grouped' (by asset class) or 'flat' (traditional table)
-  const [holdingsView, setHoldingsView] = useState<'grouped' | 'flat'>('grouped');
+  // View mode for holdings: 'tabbed' (by asset class tabs) or 'flat' (traditional table)
+  const [holdingsView, setHoldingsView] = useState<'tabbed' | 'flat'>('tabbed');
 
   // Check if we should show mandatory Kite login
   // Show it when there's no valid session and no holdings synced yet
@@ -223,11 +223,11 @@ const Index = () => {
               <ToggleGroup
                 type="single"
                 value={holdingsView}
-                onValueChange={(value) => value && setHoldingsView(value as 'grouped' | 'flat')}
+                onValueChange={(value) => value && setHoldingsView(value as 'tabbed' | 'flat')}
                 className="bg-muted/50 border border-border rounded-lg p-1"
               >
-                <ToggleGroupItem value="grouped" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
-                  <Layers className="h-4 w-4" />
+                <ToggleGroupItem value="tabbed" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
+                  <LayoutGrid className="h-4 w-4" />
                   By Asset Class
                 </ToggleGroupItem>
                 <ToggleGroupItem value="flat" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
@@ -237,8 +237,8 @@ const Index = () => {
               </ToggleGroup>
             </div>
 
-            {holdingsView === 'grouped' ? (
-              <AssetClassHoldings holdings={enrichedHoldings} />
+            {holdingsView === 'tabbed' ? (
+              <TabbedHoldings holdings={enrichedHoldings} />
             ) : (
               <HoldingsTable holdings={enrichedHoldings} />
             )}
