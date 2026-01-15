@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      exchange_rates: {
+        Row: {
+          created_at: string
+          fetched_at: string
+          from_currency: string
+          id: string
+          rate: number
+          source: string | null
+          to_currency: string
+        }
+        Insert: {
+          created_at?: string
+          fetched_at?: string
+          from_currency: string
+          id?: string
+          rate: number
+          source?: string | null
+          to_currency: string
+        }
+        Update: {
+          created_at?: string
+          fetched_at?: string
+          from_currency?: string
+          id?: string
+          rate?: number
+          source?: string | null
+          to_currency?: string
+        }
+        Relationships: []
+      }
       holdings: {
         Row: {
           avg_price: number
@@ -30,6 +60,7 @@ export type Database = {
           type: string
           updated_at: string
           user_id: string | null
+          xirr: number | null
         }
         Insert: {
           avg_price: number
@@ -46,6 +77,7 @@ export type Database = {
           type: string
           updated_at?: string
           user_id?: string | null
+          xirr?: number | null
         }
         Update: {
           avg_price?: number
@@ -62,6 +94,7 @@ export type Database = {
           type?: string
           updated_at?: string
           user_id?: string | null
+          xirr?: number | null
         }
         Relationships: []
       }

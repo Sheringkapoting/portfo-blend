@@ -10,6 +10,7 @@ export interface Holding {
   exchange: string;
   source: Source;
   isin?: string;
+  xirr?: number;
 }
 
 export interface EnrichedHolding extends Holding {

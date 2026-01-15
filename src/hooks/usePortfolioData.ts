@@ -49,6 +49,7 @@ export function usePortfolioData() {
         exchange: h.exchange,
         source: h.source as any,
         isin: h.isin || undefined,
+        xirr: h.xirr !== null ? Number(h.xirr) : undefined,
       }));
 
       setHoldings(transformed.map(enrichHolding));
