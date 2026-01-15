@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion';
-import { Database, RefreshCw, Clock } from 'lucide-react';
+import { Database, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface CacheStatusBadgeProps {
@@ -9,7 +8,6 @@ interface CacheStatusBadgeProps {
   getCacheAge: () => string | null;
   isLoadingCache: boolean;
   isUsingCache: boolean;
-  onRefresh: () => void;
 }
 
 export function CacheStatusBadge({
@@ -17,7 +15,6 @@ export function CacheStatusBadge({
   getCacheAge,
   isLoadingCache,
   isUsingCache,
-  onRefresh,
 }: CacheStatusBadgeProps) {
   const cacheAge = getCacheAge();
 
@@ -40,15 +37,6 @@ export function CacheStatusBadge({
                 {isLoadingCache ? 'Loading...' : cacheAge || 'Cached'}
               </span>
             </Badge>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={onRefresh}
-              disabled={isLoadingCache}
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${isLoadingCache ? 'animate-spin' : ''}`} />
-            </Button>
           </motion.div>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="start">

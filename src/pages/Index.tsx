@@ -163,7 +163,6 @@ const Index = () => {
               getCacheAge={getCacheAge}
               isLoadingCache={isLoadingCache}
               isUsingCache={isUsingCache}
-              onRefresh={handleRefresh}
             />
           )}
         </div>
