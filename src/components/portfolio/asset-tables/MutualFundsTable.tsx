@@ -6,12 +6,14 @@ import { SourceBadge } from '../SourceBadge';
 import { Badge } from '@/components/ui/badge';
 import { BaseAssetTable } from './BaseAssetTable';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Info } from 'lucide-react';
 
 interface MutualFundsTableProps {
   holdings: EnrichedHolding[];
 }
 
-// Calculate estimated XIRR (simplified - actual XIRR requires date-based calculation)
+// Calculate estimated XIRR as fallback (when actual XIRR is not available)
 function calculateEstimatedXIRR(holding: EnrichedHolding): number {
   // Simplified XIRR estimation based on absolute returns and assumed holding period
   // In a real scenario, this would need purchase dates
@@ -49,6 +51,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
     {
       accessorKey: 'symbol',
       header: 'Fund Name',
+      size: 250,
       cell: ({ row }) => {
         const category = getMFCategory(row.original);
         return (
@@ -69,6 +72,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
     {
       accessorKey: 'quantity',
       header: () => <span className="text-right block">Units</span>,
+      size: 100,
       cell: ({ getValue }) => (
         <span className="font-mono text-sm text-right block">
           {formatNumber(getValue() as number, 3)}
@@ -78,6 +82,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
     {
       accessorKey: 'avgPrice',
       header: () => <span className="text-right block">Avg NAV</span>,
+      size: 100,
       cell: ({ getValue }) => (
         <span className="font-mono text-sm text-right block">
           ₹{(getValue() as number).toFixed(2)}
@@ -87,6 +92,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
     {
       accessorKey: 'ltp',
       header: () => <span className="text-right block">Current NAV</span>,
+      size: 110,
       cell: ({ getValue }) => (
         <span className="font-mono text-sm font-medium text-right block">
           ₹{(getValue() as number).toFixed(2)}
@@ -96,6 +102,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
     {
       accessorKey: 'investedValue',
       header: () => <span className="text-right block">Invested</span>,
+      size: 120,
       cell: ({ getValue }) => (
         <span className="font-mono text-sm text-right block">
           {formatCurrency(getValue() as number, true)}
@@ -105,6 +112,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
     {
       accessorKey: 'currentValue',
       header: () => <span className="text-right block">Current</span>,
+      size: 120,
       cell: ({ getValue }) => (
         <span className="font-mono text-sm font-medium text-right block">
           {formatCurrency(getValue() as number, true)}
@@ -114,6 +122,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
     {
       accessorKey: 'pnl',
       header: () => <span className="text-right block">Gain/Loss</span>,
+      size: 120,
       cell: ({ row }) => {
         const pnl = row.original.pnl;
         const isProfit = pnl >= 0;
@@ -130,6 +139,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
     {
       accessorKey: 'pnlPercent',
       header: () => <span className="text-right block">Absolute</span>,
+      size: 100,
       cell: ({ getValue }) => {
         const percent = getValue() as number;
         const isProfit = percent >= 0;
@@ -144,24 +154,61 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
       },
     },
     {
-      id: 'xirr',
-      header: () => <span className="text-right block">XIRR (Est.)</span>,
+      accessorKey: 'xirr',
+      header: () => (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-right block flex items-center justify-end gap-1 cursor-help">
+                XIRR
+                <Info className="h-3 w-3 text-muted-foreground" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="text-xs max-w-[200px]">
+                XIRR (Extended Internal Rate of Return) is the annualized return considering all cash flows.
+                Values from your portfolio data are shown when available.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ),
+      size: 100,
       cell: ({ row }) => {
-        const xirr = calculateEstimatedXIRR(row.original);
-        const isProfit = xirr >= 0;
+        const actualXirr = row.original.xirr;
+        const hasActualXirr = actualXirr !== undefined && actualXirr !== null;
+        const xirrValue = hasActualXirr ? actualXirr : calculateEstimatedXIRR(row.original);
+        const isProfit = xirrValue >= 0;
+        
         return (
-          <span className={cn(
-            "font-mono text-sm font-semibold text-right block",
-            isProfit ? "text-profit" : "text-loss"
-          )}>
-            {isProfit ? '+' : ''}{xirr.toFixed(2)}%
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={cn(
+                  "font-mono text-sm font-semibold text-right block cursor-help",
+                  isProfit ? "text-profit" : "text-loss",
+                  !hasActualXirr && "opacity-70"
+                )}>
+                  {isProfit ? '+' : ''}{xirrValue.toFixed(2)}%
+                  {!hasActualXirr && <span className="text-xs ml-0.5">*</span>}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">
+                  {hasActualXirr 
+                    ? 'Actual XIRR from portfolio data' 
+                    : 'Estimated XIRR (actual data not available)'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       },
     },
     {
       accessorKey: 'source',
       header: 'Source',
+      size: 100,
       cell: ({ getValue }) => (
         <SourceBadge source={getValue() as any} />
       ),
@@ -174,6 +221,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
       columns={columns}
       searchPlaceholder="Search mutual funds..."
       emptyMessage="No mutual fund holdings found"
+      enableColumnResizing={true}
     />
   );
 }

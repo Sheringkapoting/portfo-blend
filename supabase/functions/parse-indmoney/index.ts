@@ -26,6 +26,7 @@ interface ParsedHolding {
   source: string
   isin?: string
   user_id?: string
+  xirr?: number
 }
 
 interface ValidationResult {
@@ -421,6 +422,7 @@ function parseHoldings(
       const totalUnits = parseNumber(row[columnMap.totalUnits])
       const investedAmount = parseNumber(row[columnMap.investedAmount])
       const marketValue = parseNumber(row[columnMap.marketValue])
+      const xirrValue = columnMap.xirr >= 0 ? parseNumber(row[columnMap.xirr]) : null
 
       // Skip empty rows or rows without investment name
       if (!investment || !assetType) {
@@ -473,6 +475,7 @@ function parseHoldings(
         source: 'INDMoney',
         isin,
         user_id: userId,
+        xirr: xirrValue !== null && isFinite(xirrValue) ? Math.round(xirrValue * 100) / 100 : undefined,
       }
 
       // Validate the holding
