@@ -233,6 +233,7 @@ export type Database = {
           source: string
           total_investment: number | null
           total_pnl: number | null
+          user_id: string | null
         }
         Insert: {
           asset_type?: string | null
@@ -245,6 +246,7 @@ export type Database = {
           source: string
           total_investment?: number | null
           total_pnl?: number | null
+          user_id?: string | null
         }
         Update: {
           asset_type?: string | null
@@ -257,6 +259,7 @@ export type Database = {
           source?: string
           total_investment?: number | null
           total_pnl?: number | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -300,7 +303,36 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      kite_sessions_status: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          id: string | null
+          is_valid: boolean | null
+          token_type: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          is_valid?: never
+          token_type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          is_valid?: never
+          token_type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
