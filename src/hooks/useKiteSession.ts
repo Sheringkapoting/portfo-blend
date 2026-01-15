@@ -3,9 +3,12 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface KiteSession {
   id: string;
-  access_token: string;
   expires_at: string;
   created_at: string;
+  updated_at: string;
+  user_id: string | null;
+  token_type: string | null;
+  is_valid: boolean;
 }
 
 interface UseKiteSessionReturn {
@@ -25,8 +28,9 @@ export function useKiteSession(): UseKiteSessionReturn {
 
   const fetchSession = useCallback(async () => {
     try {
+      // Use the kite_sessions_status view which doesn't expose access_token
       const { data, error } = await supabase
-        .from('kite_sessions')
+        .from('kite_sessions_status')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(1);
@@ -68,7 +72,8 @@ export function useKiteSession(): UseKiteSessionReturn {
     fetchLoginUrl();
   }, [fetchSession, fetchLoginUrl]);
 
-  const isSessionValid = Boolean(session && new Date(session.expires_at) > new Date());
+  // Use the is_valid field from the view, fallback to date comparison
+  const isSessionValid = Boolean(session?.is_valid ?? (session && new Date(session.expires_at) > new Date()));
 
   return {
     session,

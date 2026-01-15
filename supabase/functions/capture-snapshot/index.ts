@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
       .delete()
       .eq('snapshot_id', snapshot.id)
 
-    // Insert source-level details
+    // Insert source-level details with user_id
     const sourceDetails = Array.from(sourceStatsMap.values()).map(stats => ({
       snapshot_id: snapshot.id,
       source: stats.source,
@@ -218,6 +218,7 @@ Deno.serve(async (req) => {
       total_pnl: stats.pnl,
       holdings_count: stats.count,
       last_sync_at: stats.lastSyncAt?.toISOString() || null,
+      user_id: userId, // Include user_id for proper RLS
     }))
 
     if (sourceDetails.length > 0) {
