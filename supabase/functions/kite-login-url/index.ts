@@ -25,7 +25,16 @@ Deno.serve(async (req) => {
       )
     }
 
-    const loginUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}`
+    // Create state parameter with user_id for secure OAuth flow
+    // This allows kite-callback to associate the session with the correct user
+    const stateData = {
+      user_id: authResult.userId,
+      nonce: crypto.randomUUID(),
+      timestamp: Date.now()
+    }
+    const state = btoa(JSON.stringify(stateData))
+    
+    const loginUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${apiKey}&state=${encodeURIComponent(state)}`
     
     return new Response(
       JSON.stringify({ loginUrl }), 

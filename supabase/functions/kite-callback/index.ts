@@ -13,6 +13,25 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url)
     const requestToken = url.searchParams.get('request_token')
+    const stateParam = url.searchParams.get('state')
+    
+    // Parse state to extract user_id for secure OAuth flow
+    let userId: string | null = null
+    if (stateParam) {
+      try {
+        const stateData = JSON.parse(atob(stateParam))
+        userId = stateData.user_id || null
+        
+        // Validate state timestamp (reject if older than 10 minutes)
+        const stateAge = Date.now() - (stateData.timestamp || 0)
+        if (stateAge > 10 * 60 * 1000) {
+          console.warn('OAuth state expired')
+          userId = null
+        }
+      } catch (e) {
+        console.error('Failed to parse OAuth state:', e)
+      }
+    }
     
     if (!requestToken) {
       // Return HTML page that extracts token from URL and sends it
@@ -52,25 +71,47 @@ Deno.serve(async (req) => {
     <p>Connecting to Zerodha...</p>
   </div>
   <script>
+    function showError(message) {
+      const container = document.querySelector('.container');
+      container.innerHTML = '';
+      const errorP = document.createElement('p');
+      errorP.style.color = '#ef4444';
+      errorP.textContent = 'Error: ' + message;
+      container.appendChild(errorP);
+    }
+    
+    function showMessage(message) {
+      const container = document.querySelector('.container');
+      container.innerHTML = '';
+      const p = document.createElement('p');
+      p.textContent = message;
+      container.appendChild(p);
+    }
+    
     const params = new URLSearchParams(window.location.search);
     const requestToken = params.get('request_token');
+    const stateParam = params.get('state');
+    
     if (requestToken) {
-      fetch(window.location.origin + window.location.pathname + '?request_token=' + requestToken, {
-        method: 'POST'
-      })
+      let postUrl = window.location.origin + window.location.pathname + '?request_token=' + encodeURIComponent(requestToken);
+      if (stateParam) {
+        postUrl += '&state=' + encodeURIComponent(stateParam);
+      }
+      
+      fetch(postUrl, { method: 'POST' })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
           window.location.href = '${appUrl}?kite_connected=true';
         } else {
-          document.querySelector('.container').innerHTML = '<p style="color: #ef4444;">Error: ' + data.error + '</p>';
+          showError(data.error || 'Connection failed');
         }
       })
       .catch(err => {
-        document.querySelector('.container').innerHTML = '<p style="color: #ef4444;">Error: ' + err.message + '</p>';
+        showError(err.message || 'Request failed');
       });
     } else {
-      document.querySelector('.container').innerHTML = '<p>No request token found</p>';
+      showMessage('No request token found');
     }
   </script>
 </body>
@@ -131,23 +172,38 @@ Deno.serve(async (req) => {
     const expiresAt = new Date()
     expiresAt.setHours(expiresAt.getHours() + 8) // Conservative 8 hour expiry
 
-    // Delete old sessions and insert new one
-    await supabase.from('kite_sessions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    // Delete old sessions for this user and insert new one
+    if (userId) {
+      await supabase.from('kite_sessions').delete().eq('user_id', userId)
+    } else {
+      // If no user_id, delete sessions without user_id (cleanup orphaned sessions)
+      await supabase.from('kite_sessions').delete().is('user_id', null)
+    }
     
-    const { error: insertError } = await supabase.from('kite_sessions').insert({
+    const sessionData: { access_token: string; expires_at: string; user_id?: string } = {
       access_token: accessToken,
       expires_at: expiresAt.toISOString(),
-    })
+    }
+    
+    // Always set user_id if available from OAuth state
+    if (userId) {
+      sessionData.user_id = userId
+    }
+    
+    const { error: insertError } = await supabase.from('kite_sessions').insert(sessionData)
 
     if (insertError) {
       console.error('Failed to store session:', insertError)
       throw new Error('Failed to store session')
     }
+    
+    console.log('Kite session stored successfully', { userId: userId || 'none' })
 
     // Log the successful connection
     await supabase.from('sync_logs').insert({
       source: 'Zerodha',
       status: 'connected',
+      user_id: userId || null,
       holdings_count: 0,
     })
 
