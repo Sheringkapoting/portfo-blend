@@ -47,6 +47,7 @@ export type Database = {
       holdings: {
         Row: {
           avg_price: number
+          broker: string | null
           created_at: string
           exchange: string
           id: string
@@ -64,6 +65,7 @@ export type Database = {
         }
         Insert: {
           avg_price: number
+          broker?: string | null
           created_at?: string
           exchange: string
           id?: string
@@ -81,6 +83,7 @@ export type Database = {
         }
         Update: {
           avg_price?: number
+          broker?: string | null
           created_at?: string
           exchange?: string
           id?: string
