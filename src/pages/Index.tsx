@@ -85,75 +85,82 @@ const Index = () => {
     if (kiteConnected === 'true') {
       hasHandledKiteRedirect.current = true;
       
-      toast.success('Zerodha connected successfully!', {
-        description: 'Syncing your portfolio holdings...',
-        duration: 5000,
-      });
+      // Clean up URL immediately
+      window.history.replaceState({}, '', window.location.pathname);
       
-      // Persist connection flag for UX and select Data Sources tab
+      // Persist connection flag for UX
       try {
         sessionStorage.setItem('kite_connected', 'true');
         sessionStorage.setItem('kite_connected_at', String(Date.now()));
       } catch {}
+      
       // Switch to Data Sources tab to show sync progress
       setActiveTab('sources');
       
-      // Clean up URL immediately
-      window.history.replaceState({}, '', window.location.pathname);
-      
-      // Wait for session to be available, then auto-sync
-      const performSync = async () => {
-        // Wait a bit for the callback to complete writing the session
-        await new Promise(resolve => setTimeout(resolve, 2000));
+      // Poll for session with longer wait and more attempts
+      const pollForSession = async () => {
+        console.log('[Index] Polling for Kite session after OAuth redirect...');
         
-        // Refetch session to get latest state
-        const sessionData = await refetchKiteSession();
+        // Wait longer for callback to write session (it triggers zerodha-sync which takes time)
+        await new Promise(resolve => setTimeout(resolve, 3000));
         
-        if (sessionData?.is_valid) {
-          try {
-            await syncZerodhaWithRetry(5, 800);
-            toast.success('Portfolio synced!', {
-              description: 'Your Zerodha holdings have been imported.',
+        let attempts = 0;
+        const maxAttempts = 15;
+        
+        const poll = async (): Promise<boolean> => {
+          attempts++;
+          console.log(`[Index] Session poll attempt ${attempts}/${maxAttempts}`);
+          
+          const sessionData = await refetchKiteSession();
+          console.log('[Index] Session poll result:', sessionData);
+          
+          if (sessionData?.is_valid) {
+            console.log('[Index] Session is valid, proceeding with sync');
+            toast.success('Zerodha connected successfully!', {
+              description: 'Your session is active.',
               duration: 4000,
             });
-            // Switch to holdings tab after successful sync
-            setActiveTab('holdings');
+            return true;
+          }
+          
+          if (attempts >= maxAttempts) {
+            console.log('[Index] Max attempts reached, session still not valid');
+            toast.warning('Connection may be pending', {
+              description: 'Please check Data Sources tab and sync manually if needed.',
+              duration: 5000,
+            });
+            return false;
+          }
+          
+          // Wait and try again
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          return poll();
+        };
+        
+        const sessionValid = await poll();
+        
+        if (sessionValid) {
+          // Session is valid, try to sync
+          try {
+            console.log('[Index] Starting sync after successful session poll');
+            const syncSuccess = await syncZerodhaWithRetry(5, 1000);
+            if (syncSuccess) {
+              toast.success('Portfolio synced!', {
+                description: 'Your Zerodha holdings have been imported.',
+                duration: 4000,
+              });
+              setActiveTab('holdings');
+            }
           } catch (err) {
+            console.error('[Index] Sync error:', err);
             toast.error('Sync failed', {
               description: 'Please try syncing again from Data Sources.',
             });
           }
-        } else {
-          // Keep polling for session
-          let attempts = 0;
-          const checkSession = setInterval(async () => {
-            attempts++;
-            const session = await refetchKiteSession();
-            if (session?.is_valid) {
-              clearInterval(checkSession);
-              try {
-                await syncZerodhaWithRetry(5, 800);
-                toast.success('Portfolio synced!', {
-                  description: 'Your Zerodha holdings have been imported.',
-                  duration: 4000,
-                });
-                setActiveTab('holdings');
-              } catch (err) {
-                toast.error('Sync failed', {
-                  description: 'Please try syncing again from Data Sources.',
-                });
-              }
-            } else if (attempts >= 10) {
-              clearInterval(checkSession);
-              toast.error('Session not ready', {
-                description: 'Please try syncing manually from Data Sources.',
-              });
-            }
-          }, 1000);
         }
       };
       
-      performSync();
+      pollForSession();
     } else if (kiteError) {
       hasHandledKiteRedirect.current = true;
       toast.error('Zerodha connection failed', {
@@ -162,7 +169,7 @@ const Index = () => {
       });
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [syncZerodha, refetchKiteSession]);
+  }, [syncZerodhaWithRetry, refetchKiteSession]);
 
   // If we ever detect a valid session, ensure portfolio is synced at least once
   useEffect(() => {

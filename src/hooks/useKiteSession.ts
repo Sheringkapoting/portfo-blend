@@ -33,6 +33,7 @@ export function useKiteSession(): UseKiteSessionReturn {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchSession = useCallback(async (): Promise<KiteSession | null> => {
+    console.log('[useKiteSession] Fetching session...');
     try {
       // Use the kite_sessions_status view which doesn't expose access_token
       const { data, error } = await supabase
@@ -41,20 +42,25 @@ export function useKiteSession(): UseKiteSessionReturn {
         .order('created_at', { ascending: false })
         .limit(1);
 
+      console.log('[useKiteSession] Session fetch result:', { data, error });
+
       if (!error && data && data.length > 0) {
         const sessionData = data[0] as KiteSession;
+        console.log('[useKiteSession] Session found, is_valid:', sessionData.is_valid);
         setSession(sessionData);
+        setIsLoading(false);
         return sessionData;
       } else {
+        console.log('[useKiteSession] No session found');
         setSession(null);
+        setIsLoading(false);
         return null;
       }
     } catch (e) {
-      console.error('Error fetching Kite session:', e);
+      console.error('[useKiteSession] Error fetching session:', e);
       setSession(null);
-      return null;
-    } finally {
       setIsLoading(false);
+      return null;
     }
   }, []);
 
