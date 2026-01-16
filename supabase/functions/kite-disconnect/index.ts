@@ -16,55 +16,42 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey)
     const apiKey = Deno.env.get('KITE_API_KEY')
 
-    // Get user from JWT if available
-    const authHeader = req.headers.get('Authorization')
-    let userId: string | null = null
-    
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '')
-      const { data: { user } } = await supabase.auth.getUser(token)
-      userId = user?.id || null
-    }
-
-    // Get the user's current session to invalidate on Kite side
-    let accessToken: string | null = null
-    
-    // Query for sessions - if userId is available, filter by it
-    let query = supabase
+    // Get the most recent session (regardless of user_id since sessions can be null)
+    const { data: session, error: sessionError } = await supabase
       .from('kite_sessions')
       .select('id, access_token, user_id')
       .order('created_at', { ascending: false })
       .limit(1)
+      .maybeSingle()
     
-    if (userId) {
-      query = query.eq('user_id', userId)
-    }
-    
-    const { data: session, error: sessionError } = await query.single()
-    
-    if (sessionError && sessionError.code !== 'PGRST116') {
+    if (sessionError) {
       console.error('Error fetching session:', sessionError)
+      throw new Error('Failed to fetch session')
     }
     
-    if (session) {
-      accessToken = session.access_token
-      userId = session.user_id || userId // Use session's user_id if available
+    if (!session) {
+      console.log('No active session to disconnect')
+      return new Response(
+        JSON.stringify({ success: true, message: 'No active session to disconnect' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     console.log('Disconnecting Kite session:', { 
-      hasAccessToken: !!accessToken, 
+      sessionId: session.id,
+      hasAccessToken: !!session.access_token, 
       hasApiKey: !!apiKey,
-      userId 
+      userId: session.user_id
     })
 
     // Try to invalidate the token on Kite's side (best effort)
-    if (accessToken && apiKey) {
+    if (session.access_token && apiKey) {
       try {
         const deleteResponse = await fetch('https://api.kite.trade/session/token', {
           method: 'DELETE',
           headers: {
             'X-Kite-Version': '3',
-            'Authorization': `token ${apiKey}:${accessToken}`,
+            'Authorization': `token ${apiKey}:${session.access_token}`,
           },
         })
         console.log('Kite session invalidation response:', deleteResponse.status)
@@ -74,23 +61,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Delete all sessions (or just for this user if userId is available)
-    let deleteQuery = supabase.from('kite_sessions').delete()
-    
-    if (userId) {
-      deleteQuery = deleteQuery.eq('user_id', userId)
-    } else if (session?.id) {
-      // Delete the specific session we found
-      deleteQuery = deleteQuery.eq('id', session.id)
-    } else {
-      // No session found to delete
-      return new Response(
-        JSON.stringify({ success: true, message: 'No active session to disconnect' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-    
-    const { error: deleteError } = await deleteQuery
+    // Delete this specific session
+    const { error: deleteError } = await supabase
+      .from('kite_sessions')
+      .delete()
+      .eq('id', session.id)
     
     if (deleteError) {
       console.error('Failed to delete session:', deleteError)
@@ -101,7 +76,7 @@ Deno.serve(async (req) => {
     await supabase.from('sync_logs').insert({
       source: 'Zerodha',
       status: 'disconnected',
-      user_id: userId,
+      user_id: session.user_id,
       holdings_count: 0,
     })
 

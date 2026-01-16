@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-interface KiteSession {
+export interface KiteSession {
   id: string;
   expires_at: string;
   created_at: string;
@@ -30,34 +30,35 @@ export function useKiteSession(): UseKiteSessionReturn {
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const [loginUrlError, setLoginUrlError] = useState<string | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchSession = useCallback(async (): Promise<KiteSession | null> => {
-    console.log('[useKiteSession] Fetching session...');
     try {
-      // Use the kite_sessions_status view which doesn't expose access_token
       const { data, error } = await supabase
         .from('kite_sessions_status')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(1);
+        .limit(1)
+        .maybeSingle();
 
-      console.log('[useKiteSession] Session fetch result:', { data, error });
-
-      if (!error && data && data.length > 0) {
-        const sessionData = data[0] as KiteSession;
-        console.log('[useKiteSession] Session found, is_valid:', sessionData.is_valid);
-        setSession(sessionData);
-        setIsLoading(false);
-        return sessionData;
-      } else {
-        console.log('[useKiteSession] No session found');
+      if (error) {
+        console.error('[useKiteSession] Error fetching session:', error);
         setSession(null);
         setIsLoading(false);
         return null;
       }
+
+      if (data) {
+        const sessionData = data as KiteSession;
+        setSession(sessionData);
+        setIsLoading(false);
+        return sessionData;
+      }
+      
+      setSession(null);
+      setIsLoading(false);
+      return null;
     } catch (e) {
-      console.error('[useKiteSession] Error fetching session:', e);
+      console.error('[useKiteSession] Exception:', e);
       setSession(null);
       setIsLoading(false);
       return null;
@@ -84,10 +85,7 @@ export function useKiteSession(): UseKiteSessionReturn {
     }
   }, []);
 
-  // Disconnect/invalidate the current Kite session
   const disconnectSession = useCallback(async (): Promise<boolean> => {
-    if (!session) return false;
-    
     setIsDisconnecting(true);
     try {
       const { data, error } = await supabase.functions.invoke('kite-disconnect');
@@ -114,47 +112,12 @@ export function useKiteSession(): UseKiteSessionReturn {
     } finally {
       setIsDisconnecting(false);
     }
-  }, [session]);
-
-  // Start polling for session after OAuth redirect
-  const startPollingForSession = useCallback(() => {
-    // Clear any existing interval
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-    }
-    
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    pollIntervalRef.current = setInterval(async () => {
-      attempts++;
-      const sessionData = await fetchSession();
-      
-      if (sessionData?.is_valid || attempts >= maxAttempts) {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-      }
-    }, 1000);
-  }, [fetchSession]);
+  }, []);
 
   useEffect(() => {
     fetchSession();
     fetchLoginUrl();
-    
-    // Check if returning from OAuth and start polling
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('kite_connected') === 'true') {
-      startPollingForSession();
-    }
-    
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-    };
-  }, [fetchSession, fetchLoginUrl, startPollingForSession]);
+  }, [fetchSession, fetchLoginUrl]);
 
   // Calculate time until session expires
   const sessionExpiresIn = session?.expires_at
@@ -175,8 +138,7 @@ export function useKiteSession(): UseKiteSessionReturn {
       })()
     : null;
 
-  // Use the is_valid field from the view, fallback to date comparison
-  const isSessionValid = Boolean(session?.is_valid ?? (session && new Date(session.expires_at) > new Date()));
+  const isSessionValid = Boolean(session?.is_valid);
 
   return {
     session,
