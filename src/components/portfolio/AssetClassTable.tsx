@@ -25,7 +25,10 @@ import {
   Globe, 
   Landmark, 
   CircleDollarSign,
-  Home
+  Home,
+  Shield,
+  Briefcase,
+  Wallet
 } from 'lucide-react';
 
 interface AssetClassTableProps {

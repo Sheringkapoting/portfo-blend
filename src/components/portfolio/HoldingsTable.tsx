@@ -11,7 +11,7 @@ import {
   ColumnDef,
 } from '@tanstack/react-table';
 import { ArrowUpDown, ArrowUp, ArrowDown, Search, Filter, ChevronRight, Layers, X, GripVertical, Maximize2, Minimize2, Loader2 } from 'lucide-react';
-import { EnrichedHolding } from '@/types/portfolio';
+import { EnrichedHolding, Recommendation, Source } from '@/types/portfolio';
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/portfolioUtils';
 import { SourceBadge } from './SourceBadge';
 import { RecommendationBadge } from './RecommendationBadge';

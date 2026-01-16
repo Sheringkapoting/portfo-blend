@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import { EnrichedHolding } from '@/types/portfolio';
+import { EnrichedHolding, Source } from '@/types/portfolio';
 import { formatCurrency, formatPercent, formatNumber } from '@/lib/portfolioUtils';
 import { SourceBadge } from '../SourceBadge';
 import { Badge } from '@/components/ui/badge';

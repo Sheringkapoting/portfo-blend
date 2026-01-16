@@ -224,6 +224,14 @@ Deno.serve(async (req) => {
       console.error('Failed to trigger holdings sync:', syncError)
     }
 
+    // For POST requests (from the HTML page's fetch), return JSON success
+    if (req.method === 'POST') {
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // For GET requests (shouldn't happen normally as GET returns HTML), redirect
     return new Response(null, {
       status: 302,
       headers: {
@@ -237,6 +245,15 @@ Deno.serve(async (req) => {
 
     const appUrl = Deno.env.get('APP_URL') || 'https://nlnevxvsgholniaeigst.lovableproject.com'
 
+    // For POST requests, return JSON error
+    if (req.method === 'POST') {
+      return new Response(JSON.stringify({ success: false, error: errorMessage }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // For GET requests, redirect with error
     return new Response(null, {
       status: 302,
       headers: {
