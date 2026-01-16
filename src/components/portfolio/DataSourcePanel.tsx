@@ -16,6 +16,11 @@ interface SyncStatus {
   created_at: string;
 }
 
+interface SyncProgress {
+  step: 'idle' | 'connecting' | 'verifying' | 'syncing' | 'complete' | 'error';
+  message: string;
+}
+
 interface DataSourcePanelProps {
   onSyncZerodha: () => Promise<void>;
   onUploadINDMoney: (file: File) => Promise<void>;
@@ -23,6 +28,7 @@ interface DataSourcePanelProps {
   syncStatus: SyncStatus[];
   lastSync: Date | null;
   showMandatoryKiteLogin?: boolean;
+  syncProgress?: SyncProgress;
 }
 
 export function DataSourcePanel({
@@ -32,6 +38,7 @@ export function DataSourcePanel({
   syncStatus,
   lastSync,
   showMandatoryKiteLogin = false,
+  syncProgress,
 }: DataSourcePanelProps) {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -113,6 +120,7 @@ export function DataSourcePanel({
             onSyncZerodha={onSyncZerodha}
             isSyncing={isSyncing}
             zerodhaStatus={zerodhaStatus}
+            syncProgress={syncProgress}
           />
 
           {/* INDMoney Upload Card */}

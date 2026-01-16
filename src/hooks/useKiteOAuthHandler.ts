@@ -1,14 +1,29 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { KiteSession } from './useKiteSession';
+
+// Define the shape we need - matches kite_sessions_status view
+interface KiteSessionData {
+  id: string;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string | null;
+  token_type: string | null;
+  is_valid: boolean;
+}
 
 interface UseKiteOAuthHandlerOptions {
   onSessionReady: () => Promise<void>;
   onSwitchToHoldings: () => void;
   onSwitchToSources: () => void;
-  refetchSession: () => Promise<KiteSession | null>;
+  refetchSession: () => Promise<unknown>;
   refetchHoldings: () => Promise<void>;
+}
+
+export interface OAuthProgress {
+  step: 'idle' | 'connecting' | 'verifying' | 'syncing' | 'complete' | 'error';
+  message: string;
 }
 
 export function useKiteOAuthHandler({
@@ -19,16 +34,35 @@ export function useKiteOAuthHandler({
   refetchHoldings,
 }: UseKiteOAuthHandlerOptions) {
   const hasHandledRef = useRef(false);
+  const [progress, setProgress] = useState<OAuthProgress>({ step: 'idle', message: '' });
 
-  const pollForSession = useCallback(async (): Promise<KiteSession | null> => {
-    const maxAttempts = 20;
+  const pollForSession = useCallback(async (): Promise<KiteSessionData | null> => {
+    const maxAttempts = 30;
     const intervalMs = 1000;
     
+    console.log('[OAuth] Starting session polling...');
+    
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const session = await refetchSession();
+      console.log(`[OAuth] Poll attempt ${attempt}/${maxAttempts}`);
       
-      if (session?.is_valid) {
-        return session;
+      try {
+        // Direct query to ensure we get fresh data
+        const { data, error } = await supabase
+          .from('kite_sessions_status')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        
+        if (!error && data && data.length > 0) {
+          const session = data[0] as KiteSessionData;
+          if (session.is_valid) {
+            console.log('[OAuth] Valid session found!');
+            return session;
+          }
+        }
+      } catch (e) {
+        console.error('[OAuth] Poll error:', e);
       }
       
       if (attempt < maxAttempts) {
@@ -36,30 +70,40 @@ export function useKiteOAuthHandler({
       }
     }
     
+    console.log('[OAuth] Session polling timed out');
     return null;
-  }, [refetchSession]);
+  }, []);
 
   const pollForHoldings = useCallback(async (): Promise<boolean> => {
-    const maxAttempts = 10;
-    const intervalMs = 1500;
+    const maxAttempts = 15;
+    const intervalMs = 2000;
+    
+    console.log('[OAuth] Starting holdings polling...');
     
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const { data, error } = await supabase
-        .from('sync_logs')
-        .select('*')
-        .eq('source', 'Zerodha')
-        .eq('status', 'success')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      console.log(`[OAuth] Holdings poll attempt ${attempt}/${maxAttempts}`);
       
-      if (!error && data) {
-        // Check if this sync is recent (within last 60 seconds)
-        const syncTime = new Date(data.created_at).getTime();
-        const now = Date.now();
-        if (now - syncTime < 60000) {
-          return true;
+      try {
+        const { data, error } = await supabase
+          .from('sync_logs')
+          .select('*')
+          .eq('source', 'Zerodha')
+          .eq('status', 'success')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        if (!error && data) {
+          const syncTime = new Date(data.created_at).getTime();
+          const now = Date.now();
+          // Check if sync was within last 2 minutes
+          if (now - syncTime < 120000) {
+            console.log('[OAuth] Recent successful sync found!');
+            return true;
+          }
         }
+      } catch (e) {
+        console.error('[OAuth] Holdings poll error:', e);
       }
       
       if (attempt < maxAttempts) {
@@ -67,6 +111,7 @@ export function useKiteOAuthHandler({
       }
     }
     
+    console.log('[OAuth] Holdings polling timed out');
     return false;
   }, []);
 
@@ -83,23 +128,28 @@ export function useKiteOAuthHandler({
       // Clean up URL immediately
       window.history.replaceState({}, '', window.location.pathname);
       
-      // Show initial toast
-      toast.info('Connecting to Zerodha...', {
-        description: 'Please wait while we sync your portfolio.',
-        duration: 3000,
-      });
-      
-      // Switch to Data Sources to show progress
-      onSwitchToSources();
-      
       const handleConnection = async () => {
-        // Wait a bit for the callback to complete the token exchange
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log('[OAuth] Starting connection flow...');
         
-        // Poll for valid session
+        // Step 1: Show connecting message
+        setProgress({ step: 'connecting', message: 'Connecting to Zerodha...' });
+        toast.info('Connecting to Zerodha...', {
+          description: 'Please wait while we verify your session.',
+          duration: 3000,
+        });
+        
+        // Switch to Data Sources to show progress
+        onSwitchToSources();
+        
+        // Wait for callback to complete token exchange
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Step 2: Verify session
+        setProgress({ step: 'verifying', message: 'Verifying session...' });
         const session = await pollForSession();
         
         if (!session) {
+          setProgress({ step: 'error', message: 'Session verification failed' });
           toast.error('Connection timeout', {
             description: 'Could not verify session. Please try again.',
             duration: 5000,
@@ -107,53 +157,66 @@ export function useKiteOAuthHandler({
           return;
         }
         
+        // Step 3: Sync holdings
+        setProgress({ step: 'syncing', message: 'Syncing portfolio...' });
         toast.success('Zerodha connected!', {
-          description: 'Session is active. Syncing holdings...',
+          description: 'Now syncing your holdings...',
           duration: 3000,
         });
         
-        // The kite-callback already triggered zerodha-sync on the server
-        // We just need to wait for it to complete and refresh our data
+        // Update session state in the hook
+        await refetchSession();
+        
+        // Check if holdings were synced by the callback
         const syncSuccess = await pollForHoldings();
         
         if (syncSuccess) {
-          // Refresh holdings in the UI
           await refetchHoldings();
-          
+          setProgress({ step: 'complete', message: 'Sync complete!' });
           toast.success('Portfolio synced!', {
             description: 'Your Zerodha holdings have been imported.',
             duration: 4000,
           });
-          
-          // Switch to Holdings tab
           onSwitchToHoldings();
         } else {
           // Try manual sync as fallback
           try {
+            setProgress({ step: 'syncing', message: 'Running manual sync...' });
             await onSessionReady();
             await refetchHoldings();
+            setProgress({ step: 'complete', message: 'Sync complete!' });
             toast.success('Portfolio synced!', {
               description: 'Your Zerodha holdings have been imported.',
               duration: 4000,
             });
             onSwitchToHoldings();
           } catch (err) {
-            toast.warning('Sync may be pending', {
-              description: 'Please click "Sync Holdings" to refresh.',
+            console.error('[OAuth] Manual sync failed:', err);
+            setProgress({ step: 'error', message: 'Sync failed' });
+            toast.warning('Sync pending', {
+              description: 'Session is active. Click "Sync Holdings" to import.',
               duration: 5000,
             });
           }
         }
+        
+        // Reset progress after a delay
+        setTimeout(() => {
+          setProgress({ step: 'idle', message: '' });
+        }, 3000);
       };
       
       handleConnection();
     } else if (kiteError) {
       hasHandledRef.current = true;
+      setProgress({ step: 'error', message: decodeURIComponent(kiteError) });
       toast.error('Zerodha connection failed', {
         description: decodeURIComponent(kiteError),
         duration: 5000,
       });
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [pollForSession, pollForHoldings, onSessionReady, onSwitchToHoldings, onSwitchToSources, refetchHoldings]);
+  }, [pollForSession, pollForHoldings, onSessionReady, onSwitchToHoldings, onSwitchToSources, refetchSession, refetchHoldings]);
+
+  return { progress };
 }
