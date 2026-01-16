@@ -27,7 +27,7 @@ interface ParsedHolding {
   isin?: string
   user_id?: string
   xirr?: number
-  broker?: string
+  broker: string
 }
 
 interface ValidationResult {
@@ -170,6 +170,11 @@ Deno.serve(async (req) => {
 
     if (headerRow === -1) {
       throw new Error('Could not find header row in the file. Expected columns like Asset Type, Investment, Total Units, etc.')
+    }
+
+    // Validate Broker column existence
+    if (columnMap.broker === -1) {
+      throw new Error('Required "Broker" column not found in the file. Please ensure the Excel template includes a "Broker" column.')
     }
 
     console.log(`Header found at row ${headerRow + 1}`)
@@ -453,12 +458,20 @@ function parseHoldings(
       const investedAmount = parseNumber(row[columnMap.investedAmount])
       const marketValue = parseNumber(row[columnMap.marketValue])
       const xirrValue = columnMap.xirr >= 0 ? parseOptionalPercent(row[columnMap.xirr]) : null
-      const broker = columnMap.broker >= 0
-        ? String(row[columnMap.broker] || '').trim().slice(0, 100)
-        : ''
+      const broker = String(row[columnMap.broker] || '').trim().slice(0, 100)
 
       // Skip empty rows or rows without investment name
       if (!investment || !assetType) {
+        continue
+      }
+
+      // Validate Broker for each record
+      if (!broker || broker.toLowerCase() === 'n/a' || broker === '-') {
+        skipped.push({
+          row: i + 1,
+          reason: 'Missing or invalid broker information',
+          data: { investment, assetType }
+        })
         continue
       }
 
@@ -509,7 +522,7 @@ function parseHoldings(
         isin,
         user_id: userId,
         xirr: xirrValue !== null && isFinite(xirrValue) ? Math.round(xirrValue * 100) / 100 : undefined,
-        broker: broker || undefined,
+        broker: broker,
       }
 
       // Validate the holding
@@ -657,6 +670,10 @@ function validateHolding(holding: ParsedHolding): ValidationResult {
 
   if (!holding.name || holding.name.length < 2) {
     errors.push('Invalid name')
+  }
+
+  if (!holding.broker || holding.broker.length < 2) {
+    errors.push('Invalid or missing broker')
   }
 
   if (holding.quantity <= 0) {

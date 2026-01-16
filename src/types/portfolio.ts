@@ -11,6 +11,7 @@ export interface Holding {
   source: Source;
   isin?: string;
   xirr?: number;
+  broker?: string;
 }
 
 export interface EnrichedHolding extends Holding {
