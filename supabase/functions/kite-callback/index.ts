@@ -14,6 +14,7 @@ Deno.serve(async (req) => {
     const url = new URL(req.url)
     const requestToken = url.searchParams.get('request_token')
     const stateParam = url.searchParams.get('state')
+    const appUrl = Deno.env.get('APP_URL') || 'https://nlnevxvsgholniaeigst.lovableproject.com'
     
     // Parse state to extract user_id for secure OAuth flow
     let userId: string | null = null
@@ -34,8 +35,6 @@ Deno.serve(async (req) => {
     }
     
     if (!requestToken) {
-      // Return HTML page that extracts token from URL and sends it
-      const appUrl = Deno.env.get('APP_URL') || 'https://nlnevxvsgholniaeigst.lovableproject.com'
       return new Response(`
 <!DOCTYPE html>
 <html>
@@ -225,17 +224,25 @@ Deno.serve(async (req) => {
       console.error('Failed to trigger holdings sync:', syncError)
     }
 
-    return new Response(
-      JSON.stringify({ success: true, message: 'Connected to Zerodha successfully' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return new Response(null, {
+      status: 302,
+      headers: {
+        ...corsHeaders,
+        Location: `${appUrl}?kite_connected=true`,
+      },
+    })
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('Kite callback error:', errorMessage)
-    
-    return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+
+    const appUrl = Deno.env.get('APP_URL') || 'https://nlnevxvsgholniaeigst.lovableproject.com'
+
+    return new Response(null, {
+      status: 302,
+      headers: {
+        ...corsHeaders,
+        Location: `${appUrl}?kite_error=${encodeURIComponent(errorMessage)}`,
+      },
+    })
   }
 })
