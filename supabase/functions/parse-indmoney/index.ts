@@ -27,6 +27,7 @@ interface ParsedHolding {
   isin?: string
   user_id?: string
   xirr?: number
+  broker?: string
 }
 
 interface ValidationResult {
@@ -165,12 +166,17 @@ Deno.serve(async (req) => {
 
     // Find header row and parse column mapping
     const { headerRow, columnMap } = findHeaderRowAndColumns(jsonData)
-    
+    const hasXirrColumn = columnMap.xirr >= 0
+
     if (headerRow === -1) {
       throw new Error('Could not find header row in the file. Expected columns like Asset Type, Investment, Total Units, etc.')
     }
 
     console.log(`Header found at row ${headerRow + 1}`)
+
+    if (!hasXirrColumn) {
+      console.warn('XIRR (%) column not found. XIRR values will not be imported from this file.')
+    }
 
     // Parse holdings with validation and timeout protection
     const parseResult = parseHoldings(jsonData, headerRow, columnMap, startTime, authResult.userId)
@@ -190,6 +196,14 @@ Deno.serve(async (req) => {
 
     // Verify data integrity before proceeding
     const verification = verifyDataIntegrity(parseResult.holdings)
+    if (!hasXirrColumn) {
+      verification.warnings.push('XIRR (%) column is missing. XIRR values were not imported from this file.')
+    } else {
+      const holdingsWithXirr = parseResult.holdings.filter(h => typeof h.xirr === 'number').length
+      if (holdingsWithXirr === 0 && parseResult.holdings.length > 0) {
+        verification.warnings.push('No valid XIRR values found in XIRR (%) column. Invalid or blank entries were ignored.')
+      }
+    }
     if (!verification.isValid) {
       console.warn('Data integrity warnings:', verification.warnings)
     }
@@ -360,7 +374,7 @@ function findHeaderRowAndColumns(data: any[][]): { headerRow: number; columnMap:
         else if (cellStr.includes('holding') && cellStr.includes('%')) columnMap.holdingPercent = idx
         else if (cellStr.includes('gain') && cellStr.includes('inr')) columnMap.totalGainLoss = idx
         else if (cellStr.includes('gain') && cellStr.includes('%')) columnMap.totalGainLossPercent = idx
-        else if (cellStr === 'xirr (%)' || cellStr === 'xirr') columnMap.xirr = idx
+        else if (cellStr.includes('xirr')) columnMap.xirr = idx
       })
 
       return { headerRow: i, columnMap }
@@ -388,6 +402,22 @@ function parseNumber(value: any): number {
   
   const num = parseFloat(str)
   return (isNaN(num) || !isFinite(num)) ? 0 : num
+}
+
+function parseOptionalPercent(value: any): number | null {
+  if (value === null || value === undefined) return null
+  const raw = String(value).trim()
+  if (!raw || raw === '-' || raw.toUpperCase() === 'N/A') return null
+
+  const cleaned = raw
+    .replace(/[₹,\s]/g, '')
+    .replace(/^\((.+)\)$/, '-$1')
+    .replace(/%/g, '')
+    .replace(/per\s*annum/gi, '')
+    .replace(/p\.?a\.?/gi, '')
+
+  const num = parseFloat(cleaned)
+  return (isNaN(num) || !isFinite(num)) ? null : num
 }
 
 /**
@@ -422,7 +452,10 @@ function parseHoldings(
       const totalUnits = parseNumber(row[columnMap.totalUnits])
       const investedAmount = parseNumber(row[columnMap.investedAmount])
       const marketValue = parseNumber(row[columnMap.marketValue])
-      const xirrValue = columnMap.xirr >= 0 ? parseNumber(row[columnMap.xirr]) : null
+      const xirrValue = columnMap.xirr >= 0 ? parseOptionalPercent(row[columnMap.xirr]) : null
+      const broker = columnMap.broker >= 0
+        ? String(row[columnMap.broker] || '').trim().slice(0, 100)
+        : ''
 
       // Skip empty rows or rows without investment name
       if (!investment || !assetType) {
@@ -476,6 +509,7 @@ function parseHoldings(
         isin,
         user_id: userId,
         xirr: xirrValue !== null && isFinite(xirrValue) ? Math.round(xirrValue * 100) / 100 : undefined,
+        broker: broker || undefined,
       }
 
       // Validate the holding

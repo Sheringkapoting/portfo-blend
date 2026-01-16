@@ -69,7 +69,7 @@ export function SGBTable({ holdings }: SGBTableProps) {
     },
     {
       accessorKey: 'investedValue',
-      header: () => <span className="text-right block">Invested</span>,
+      header: () => <span className="text-right block">Invested Amount</span>,
       cell: ({ getValue }) => (
         <span className="font-mono text-sm text-right block">
           {formatCurrency(getValue() as number, true)}

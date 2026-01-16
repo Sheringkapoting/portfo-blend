@@ -8,7 +8,10 @@ import {
   Coins, 
   PiggyBank,
   Landmark,
-  Building
+  Building,
+  Briefcase,
+  Shield,
+  Wallet
 } from 'lucide-react';
 import { EnrichedHolding, AssetType } from '@/types/portfolio';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -21,6 +24,7 @@ import { SGBTable } from './asset-tables/SGBTable';
 import { BondTable } from './asset-tables/BondTable';
 import { formatCurrency, formatPercent } from '@/lib/portfolioUtils';
 import { cn } from '@/lib/utils';
+import { useExchangeRate } from '@/hooks/useExchangeRate';
 
 interface TabbedHoldingsProps {
   holdings: EnrichedHolding[];
@@ -41,13 +45,31 @@ const ASSET_CONFIG: Record<string, {
   'REIT': { label: 'REIT', icon: Building },
   'Commodity': { label: 'Commodity', icon: PiggyBank },
   'Index': { label: 'Index', icon: BarChart3 },
+  'NPS': { label: 'NPS', icon: Shield },
+  'EPF': { label: 'EPF', icon: Briefcase },
+  'PPF': { label: 'PPF', icon: Wallet },
 };
 
 // Order of tabs
-const TAB_ORDER = ['Equity', 'Mutual Fund', 'ETF', 'US Stock', 'SGB', 'Bond', 'REIT', 'Commodity', 'Index'];
+const TAB_ORDER = ['Equity', 'Mutual Fund', 'ETF', 'US Stock', 'SGB', 'Bond', 'REIT', 'Commodity', 'Index', 'NPS', 'EPF', 'PPF'];
 
 export function TabbedHoldings({ holdings }: TabbedHoldingsProps) {
   const [activeTab, setActiveTab] = useState<string>('all');
+  const { rate } = useExchangeRate('USD', 'INR');
+
+  const convertToUSD = (inrValue: number): number => {
+    if (!rate || rate === 0) return inrValue / 83.5;
+    return inrValue / rate;
+  };
+
+  const formatUSD = (value: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
 
   // Group holdings by asset type with MF consolidation
   const { groupedHoldings, assetSummaries, availableTabs } = useMemo(() => {
@@ -155,35 +177,30 @@ export function TabbedHoldings({ holdings }: TabbedHoldingsProps) {
   return (
     <div className="space-y-4">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="overflow-x-auto -mx-4 px-4 pb-2">
-          <TabsList className="bg-muted/30 border border-border p-1 inline-flex min-w-max gap-1">
-            {/* All Holdings Tab */}
+        <div className="overflow-x-auto border-b border-border -mx-4 px-4 pb-1">
+          <TabsList className="h-auto bg-transparent p-0 gap-4 min-w-max">
             <TabsTrigger 
               value="all" 
-              className="gap-2 px-4 py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm whitespace-nowrap"
+              className="px-3 py-2 text-sm rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-foreground whitespace-nowrap"
             >
-              <Building2 className="h-4 w-4" />
-              <span>All</span>
+              <span className="font-medium">All</span>
               <span className="ml-1 text-xs text-muted-foreground">
                 ({totalSummary.count})
               </span>
             </TabsTrigger>
 
-            {/* Asset Type Tabs */}
             {availableTabs.map(type => {
               const config = ASSET_CONFIG[type];
               const summary = assetSummaries.get(type)!;
-              const Icon = config?.icon || BarChart3;
               const isProfitable = summary.pnl >= 0;
 
               return (
                 <TabsTrigger 
                   key={type}
                   value={type} 
-                  className="gap-2 px-4 py-2 data-[state=active]:bg-card data-[state=active]:shadow-sm whitespace-nowrap"
+                  className="px-3 py-2 text-sm rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-foreground whitespace-nowrap"
                 >
-                  <Icon className="h-4 w-4" />
-                  <span>{config?.label || type}</span>
+                  <span className="font-medium">{config?.label || type}</span>
                   <span className="ml-1 text-xs text-muted-foreground">
                     ({summary.count})
                   </span>
@@ -208,6 +225,10 @@ export function TabbedHoldings({ holdings }: TabbedHoldingsProps) {
               const summary = assetSummaries.get(type)!;
               const Icon = config?.icon || BarChart3;
               const isProfitable = summary.pnl >= 0;
+              const isUSStockType = type === 'US Stock';
+              const investedUsd = isUSStockType ? convertToUSD(summary.invested) : 0;
+              const currentUsd = isUSStockType ? convertToUSD(summary.current) : 0;
+              const pnlUsd = isUSStockType ? convertToUSD(summary.pnl) : 0;
 
               return (
                 <motion.div
@@ -234,12 +255,22 @@ export function TabbedHoldings({ holdings }: TabbedHoldingsProps) {
                     </div>
                     <div className="flex items-center gap-6 text-sm">
                       <div className="text-right">
-                        <p className="text-muted-foreground text-xs">Invested</p>
+                        <p className="text-muted-foreground text-xs">Invested Amount</p>
                         <p className="font-mono font-medium">{formatCurrency(summary.invested, true)}</p>
+                        {isUSStockType && (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {formatUSD(investedUsd)}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
-                        <p className="text-muted-foreground text-xs">Current</p>
+                        <p className="text-muted-foreground text-xs">Current Value</p>
                         <p className="font-mono font-medium">{formatCurrency(summary.current, true)}</p>
+                        {isUSStockType && (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {formatUSD(currentUsd)}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="text-muted-foreground text-xs">P&L</p>
@@ -252,6 +283,11 @@ export function TabbedHoldings({ holdings }: TabbedHoldingsProps) {
                             ({formatPercent((summary.pnl / summary.invested) * 100)})
                           </span>
                         </p>
+                        {isUSStockType && (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {formatUSD(pnlUsd)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -300,15 +336,29 @@ export function TabbedHoldings({ holdings }: TabbedHoldingsProps) {
                 {(() => {
                   const summary = assetSummaries.get(type)!;
                   const isProfitable = summary.pnl >= 0;
+                  const isUSStockType = type === 'US Stock';
+                  const investedUsd = isUSStockType ? convertToUSD(summary.invested) : 0;
+                  const currentUsd = isUSStockType ? convertToUSD(summary.current) : 0;
+                  const pnlUsd = isUSStockType ? convertToUSD(summary.pnl) : 0;
                   return (
                     <div className="flex items-center gap-6 text-sm">
                       <div className="text-right">
                         <p className="text-muted-foreground text-xs">Total Invested</p>
                         <p className="font-mono font-medium text-lg">{formatCurrency(summary.invested, true)}</p>
+                        {isUSStockType && (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {formatUSD(investedUsd)}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="text-muted-foreground text-xs">Current Value</p>
                         <p className="font-mono font-medium text-lg">{formatCurrency(summary.current, true)}</p>
+                        {isUSStockType && (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {formatUSD(currentUsd)}
+                          </p>
+                        )}
                       </div>
                       <div className="text-right">
                         <p className="text-muted-foreground text-xs">Total P&L</p>
@@ -321,6 +371,11 @@ export function TabbedHoldings({ holdings }: TabbedHoldingsProps) {
                             ({formatPercent((summary.pnl / summary.invested) * 100)})
                           </span>
                         </p>
+                        {isUSStockType && (
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {formatUSD(pnlUsd)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   );

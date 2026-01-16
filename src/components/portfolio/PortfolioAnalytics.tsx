@@ -44,7 +44,7 @@ const chartConfig = {
     color: 'hsl(var(--primary))',
   },
   total_investment: {
-    label: 'Invested',
+    label: 'Invested Amount',
     color: 'hsl(var(--muted-foreground))',
   },
 };
@@ -407,7 +407,7 @@ export function PortfolioAnalytics() {
                   content={<ChartTooltipContent 
                     formatter={(value, name) => {
                       if (name === 'current_value') return [formatCurrency(Number(value)), 'Value'];
-                      if (name === 'total_investment') return [formatCurrency(Number(value)), 'Invested'];
+                      if (name === 'total_investment') return [formatCurrency(Number(value)), 'Invested Amount'];
                       return [value, name];
                     }}
                   />} 

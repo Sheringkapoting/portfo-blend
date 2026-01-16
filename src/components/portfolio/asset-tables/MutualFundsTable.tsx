@@ -13,16 +13,6 @@ interface MutualFundsTableProps {
   holdings: EnrichedHolding[];
 }
 
-// Calculate estimated XIRR as fallback (when actual XIRR is not available)
-function calculateEstimatedXIRR(holding: EnrichedHolding): number {
-  // Simplified XIRR estimation based on absolute returns and assumed holding period
-  // In a real scenario, this would need purchase dates
-  const absoluteReturn = holding.pnlPercent / 100;
-  const assumedYears = 1; // Assume 1 year holding for estimation
-  const xirr = (Math.pow(1 + absoluteReturn, 1 / assumedYears) - 1) * 100;
-  return xirr;
-}
-
 // Get MF category from type or name
 function getMFCategory(holding: EnrichedHolding): string {
   const type = holding.type as string;
@@ -101,7 +91,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
     },
     {
       accessorKey: 'investedValue',
-      header: () => <span className="text-right block">Invested</span>,
+      header: () => <span className="text-right block">Invested Amount</span>,
       size: 120,
       cell: ({ getValue }) => (
         <span className="font-mono text-sm text-right block">
@@ -111,7 +101,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
     },
     {
       accessorKey: 'currentValue',
-      header: () => <span className="text-right block">Current</span>,
+      header: () => <span className="text-right block">Current Value</span>,
       size: 120,
       cell: ({ getValue }) => (
         <span className="font-mono text-sm font-medium text-right block">
@@ -140,16 +130,48 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
       accessorKey: 'pnlPercent',
       header: () => <span className="text-right block">Absolute</span>,
       size: 100,
-      cell: ({ getValue }) => {
-        const percent = getValue() as number;
-        const isProfit = percent >= 0;
+      cell: ({ row }) => {
+        const actualXirr = row.original.xirr;
+        const hasActualXirr = actualXirr !== undefined && actualXirr !== null;
+
+        if (!hasActualXirr) {
+          return (
+            <span className="font-mono text-sm font-semibold text-right block text-muted-foreground">
+              -
+            </span>
+          );
+        }
+
+        const isProfit = actualXirr >= 0;
+        const isFromExcel = row.original.source === 'INDMoney';
+
         return (
-          <span className={cn(
-            "font-mono text-sm font-semibold text-right block",
-            isProfit ? "text-profit" : "text-loss"
-          )}>
-            {formatPercent(percent)}
-          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className={cn(
+                    "font-mono text-sm font-semibold text-right block cursor-help",
+                    isProfit ? "text-profit" : "text-loss"
+                  )}
+                >
+                  {isProfit ? '+' : ''}{actualXirr.toFixed(2)}%
+                  {isFromExcel && (
+                    <span className="ml-1 text-[0.6rem] uppercase tracking-wide text-muted-foreground">
+                      IND
+                    </span>
+                  )}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs max-w-[220px]">
+                  {isFromExcel
+                    ? 'XIRR imported from your INDMoney Excel file'
+                    : 'XIRR value from portfolio data'}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         );
       },
     },
@@ -177,8 +199,17 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
       cell: ({ row }) => {
         const actualXirr = row.original.xirr;
         const hasActualXirr = actualXirr !== undefined && actualXirr !== null;
-        const xirrValue = hasActualXirr ? actualXirr : calculateEstimatedXIRR(row.original);
-        const isProfit = xirrValue >= 0;
+
+        if (!hasActualXirr) {
+          return (
+            <span className="font-mono text-sm font-semibold text-right block text-muted-foreground">
+              -
+            </span>
+          );
+        }
+
+        const isProfit = actualXirr >= 0;
+        const isFromExcel = row.original.source === 'INDMoney';
         
         return (
           <TooltipProvider>
@@ -186,18 +217,21 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
               <TooltipTrigger asChild>
                 <span className={cn(
                   "font-mono text-sm font-semibold text-right block cursor-help",
-                  isProfit ? "text-profit" : "text-loss",
-                  !hasActualXirr && "opacity-70"
+                  isProfit ? "text-profit" : "text-loss"
                 )}>
-                  {isProfit ? '+' : ''}{xirrValue.toFixed(2)}%
-                  {!hasActualXirr && <span className="text-xs ml-0.5">*</span>}
+                  {isProfit ? '+' : ''}{actualXirr.toFixed(2)}%
+                  {isFromExcel && (
+                    <span className="ml-1 text-[0.6rem] uppercase tracking-wide text-muted-foreground">
+                      IND
+                    </span>
+                  )}
                 </span>
               </TooltipTrigger>
               <TooltipContent>
                 <p className="text-xs">
-                  {hasActualXirr 
-                    ? 'Actual XIRR from portfolio data' 
-                    : 'Estimated XIRR (actual data not available)'}
+                  {isFromExcel
+                    ? 'XIRR imported from your INDMoney Excel file'
+                    : 'XIRR value from portfolio data'}
                 </p>
               </TooltipContent>
             </Tooltip>
@@ -210,7 +244,7 @@ export function MutualFundsTable({ holdings }: MutualFundsTableProps) {
       header: 'Source',
       size: 100,
       cell: ({ getValue }) => (
-        <SourceBadge source={getValue() as any} />
+        <SourceBadge source={getValue() as Source} />
       ),
     },
   ], []);
