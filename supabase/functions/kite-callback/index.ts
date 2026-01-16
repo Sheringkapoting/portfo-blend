@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
     const url = new URL(req.url)
     const requestToken = url.searchParams.get('request_token')
     const stateParam = url.searchParams.get('state')
-    const appUrl = Deno.env.get('APP_URL') || 'https://nlnevxvsgholniaeigst.lovableproject.com'
+    const appUrl = Deno.env.get('APP_URL') || 'https://portfo-blend.lovable.app'
     
     // Parse state to extract user_id for secure OAuth flow
     let userId: string | null = null
@@ -243,7 +243,7 @@ Deno.serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('Kite callback error:', errorMessage)
 
-    const appUrl = Deno.env.get('APP_URL') || 'https://nlnevxvsgholniaeigst.lovableproject.com'
+    const appUrl = Deno.env.get('APP_URL') || 'https://portfo-blend.lovable.app'
 
     // For POST requests, return JSON error
     if (req.method === 'POST') {
