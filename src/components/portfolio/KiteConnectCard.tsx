@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ExternalLink, CheckCircle2, AlertCircle, RefreshCw, Info, CloudDownload, LogOut, Clock, Shield } from 'lucide-react';
+import { ExternalLink, CheckCircle2, AlertCircle, RefreshCw, Info, CloudDownload, LogOut, Clock, Shield, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { supabase } from '@/integrations/supabase/client';
+import { Progress } from '@/components/ui/progress';
 import { useKiteSession } from '@/hooks/useKiteSession';
 import {
   AlertDialog,
@@ -27,9 +27,13 @@ interface KiteConnectCardProps {
     holdings_count: number | null;
     error_message: string | null;
   };
+  syncProgress?: {
+    step: 'idle' | 'connecting' | 'verifying' | 'syncing' | 'complete' | 'error';
+    message: string;
+  };
 }
 
-export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: KiteConnectCardProps) {
+export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncProgress }: KiteConnectCardProps) {
   const {
     session,
     isLoading,
@@ -39,15 +43,37 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
     disconnectSession,
     isDisconnecting,
     sessionExpiresIn,
+    refetch: refreshSession,
   } = useKiteSession();
   
   const [showSetup, setShowSetup] = useState(false);
   const [isAuthRedirecting, setIsAuthRedirecting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleLogin = () => {
     if (loginUrl) {
       setIsAuthRedirecting(true);
       window.location.href = loginUrl;
+    }
+  };
+
+  const handleRefreshSession = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshSession();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Calculate progress percentage for sync steps
+  const getProgressValue = () => {
+    switch (syncProgress?.step) {
+      case 'connecting': return 25;
+      case 'verifying': return 50;
+      case 'syncing': return 75;
+      case 'complete': return 100;
+      default: return 0;
     }
   };
 
@@ -63,6 +89,8 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
       </Card>
     );
   }
+
+  const showProgressIndicator = syncProgress && syncProgress.step !== 'idle' && syncProgress.step !== 'error';
 
   return (
     <Card className="border-border bg-card/50 backdrop-blur-sm">
@@ -87,6 +115,21 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Sync Progress Indicator */}
+        {showProgressIndicator && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-2"
+          >
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">{syncProgress.message}</span>
+              <span className="text-muted-foreground">{getProgressValue()}%</span>
+            </div>
+            <Progress value={getProgressValue()} className="h-2" />
+          </motion.div>
+        )}
+
         {isSessionValid ? (
           <>
             <div className="text-sm text-muted-foreground space-y-2">
@@ -120,6 +163,22 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
                   <RefreshCw className="h-4 w-4 mr-2" />
                 )}
                 Sync Holdings
+              </Button>
+              
+              {/* Refresh Session Button */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleRefreshSession}
+                disabled={isRefreshing}
+                title="Refresh session status"
+                className="shrink-0"
+              >
+                {isRefreshing ? (
+                  <RotateCcw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4" />
+                )}
               </Button>
               
               <AlertDialog>
@@ -192,18 +251,36 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
               </div>
             )}
             
-            <Button
-              onClick={handleLogin}
-              disabled={!loginUrl || isAuthRedirecting}
-              className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
-            >
-              {isAuthRedirecting ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <ExternalLink className="h-4 w-4 mr-2" />
-              )}
-              {loginUrl ? (isAuthRedirecting ? 'Redirecting...' : 'Connect Zerodha') : 'Loading...'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleLogin}
+                disabled={!loginUrl || isAuthRedirecting}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
+              >
+                {isAuthRedirecting ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                )}
+                {loginUrl ? (isAuthRedirecting ? 'Redirecting...' : 'Connect Zerodha') : 'Loading...'}
+              </Button>
+              
+              {/* Refresh Session Button - also available when not connected */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleRefreshSession}
+                disabled={isRefreshing}
+                title="Check for active session"
+                className="shrink-0"
+              >
+                {isRefreshing ? (
+                  <RotateCcw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
 
             <Button
               variant="ghost"
@@ -245,4 +322,3 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
     </Card>
   );
 }
-

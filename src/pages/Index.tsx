@@ -71,7 +71,7 @@ const Index = () => {
   const [hasCheckedKiteOnce, setHasCheckedKiteOnce] = useState(false);
 
   // Handle OAuth redirect with new dedicated hook
-  useKiteOAuthHandler({
+  const { progress: oauthProgress } = useKiteOAuthHandler({
     onSessionReady: syncZerodha,
     onSwitchToHoldings: () => setActiveTab('holdings'),
     onSwitchToSources: () => setActiveTab('sources'),
@@ -301,6 +301,7 @@ const Index = () => {
               isSyncing={isSyncing}
               syncStatus={syncStatus}
               lastSync={lastSync}
+              syncProgress={oauthProgress}
             />
           </TabsContent>
         </Tabs>
