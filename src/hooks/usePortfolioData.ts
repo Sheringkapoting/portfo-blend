@@ -102,6 +102,38 @@ export function usePortfolioData() {
     }
   }, [fetchHoldings, fetchSyncStatus]);
 
+  const syncZerodhaWithRetry = useCallback(async (maxAttempts = 5, baseDelayMs = 1000) => {
+    let attempt = 0;
+    let delay = baseDelayMs;
+    while (attempt < maxAttempts) {
+      attempt++;
+      setIsSyncing(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('zerodha-sync');
+        if (error) throw error;
+        if (data.success) {
+          toast.success(data.message);
+          await fetchHoldings();
+          await fetchSyncStatus();
+          return true;
+        } else {
+          throw new Error(data.error || 'Failed to sync Zerodha');
+        }
+      } catch (err: any) {
+        console.error(`Zerodha sync attempt ${attempt} failed:`, err);
+        if (attempt >= maxAttempts) {
+          toast.error(err.message || 'Failed to sync Zerodha');
+          return false;
+        }
+        await new Promise(res => setTimeout(res, delay));
+        delay = Math.min(delay * 2, 10000);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
+    return false;
+  }, [fetchHoldings, fetchSyncStatus]);
+
   const uploadINDMoneyExcel = useCallback(async (file: File) => {
     setIsSyncing(true);
     try {
@@ -141,6 +173,7 @@ export function usePortfolioData() {
     lastSync,
     syncStatus,
     syncZerodha,
+    syncZerodhaWithRetry,
     uploadINDMoneyExcel,
     refetch: fetchHoldings,
   };

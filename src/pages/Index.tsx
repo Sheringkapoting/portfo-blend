@@ -36,6 +36,7 @@ const Index = () => {
     lastSync,
     syncStatus,
     syncZerodha,
+    syncZerodhaWithRetry,
     uploadINDMoneyExcel,
     refetch,
   } = usePortfolioData();
@@ -88,6 +89,11 @@ const Index = () => {
         duration: 5000,
       });
       
+      // Persist connection flag for UX and select Data Sources tab
+      try {
+        sessionStorage.setItem('kite_connected', 'true');
+        sessionStorage.setItem('kite_connected_at', String(Date.now()));
+      } catch {}
       // Switch to Data Sources tab to show sync progress
       setActiveTab('sources');
       
@@ -104,7 +110,7 @@ const Index = () => {
         
         if (sessionData?.is_valid) {
           try {
-            await syncZerodha();
+            await syncZerodhaWithRetry(5, 800);
             toast.success('Portfolio synced!', {
               description: 'Your Zerodha holdings have been imported.',
               duration: 4000,
@@ -125,7 +131,7 @@ const Index = () => {
             if (session?.is_valid) {
               clearInterval(checkSession);
               try {
-                await syncZerodha();
+                await syncZerodhaWithRetry(5, 800);
                 toast.success('Portfolio synced!', {
                   description: 'Your Zerodha holdings have been imported.',
                   duration: 4000,
@@ -156,6 +162,14 @@ const Index = () => {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [syncZerodha, refetchKiteSession]);
+
+  // After server-side sync logs success, auto-switch to Holdings
+  useEffect(() => {
+    const latestZerodha = syncStatus.find(s => s.source === 'Zerodha');
+    if (hasHandledKiteRedirect.current && latestZerodha && latestZerodha.status === 'success') {
+      setActiveTab('holdings');
+    }
+  }, [syncStatus]);
 
   useEffect(() => {
     // Only check once after initial load
