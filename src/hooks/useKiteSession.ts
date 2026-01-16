@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface KiteSession {
   id: string;
@@ -18,6 +19,9 @@ interface UseKiteSessionReturn {
   loginUrl: string | null;
   loginUrlError: string | null;
   refetch: () => Promise<void>;
+  disconnectSession: () => Promise<void>;
+  isDisconnecting: boolean;
+  sessionExpiresIn: string | null;
 }
 
 export function useKiteSession(): UseKiteSessionReturn {
@@ -25,6 +29,7 @@ export function useKiteSession(): UseKiteSessionReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const [loginUrlError, setLoginUrlError] = useState<string | null>(null);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   const fetchSession = useCallback(async () => {
     try {
@@ -67,10 +72,55 @@ export function useKiteSession(): UseKiteSessionReturn {
     }
   }, []);
 
+  // Disconnect/invalidate the current Kite session
+  const disconnectSession = useCallback(async () => {
+    if (!session) return;
+    
+    setIsDisconnecting(true);
+    try {
+      const { error } = await supabase.functions.invoke('kite-disconnect');
+      
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      setSession(null);
+      toast.success('Zerodha disconnected', {
+        description: 'Your Zerodha session has been terminated.',
+      });
+    } catch (e) {
+      console.error('Error disconnecting Kite session:', e);
+      toast.error('Failed to disconnect', {
+        description: 'Please try again.',
+      });
+    } finally {
+      setIsDisconnecting(false);
+    }
+  }, [session]);
+
   useEffect(() => {
     fetchSession();
     fetchLoginUrl();
   }, [fetchSession, fetchLoginUrl]);
+
+  // Calculate time until session expires
+  const sessionExpiresIn = session?.expires_at
+    ? (() => {
+        const expiresAt = new Date(session.expires_at);
+        const now = new Date();
+        const diffMs = expiresAt.getTime() - now.getTime();
+        
+        if (diffMs <= 0) return null;
+        
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        
+        if (hours > 0) {
+          return `${hours}h ${minutes}m`;
+        }
+        return `${minutes}m`;
+      })()
+    : null;
 
   // Use the is_valid field from the view, fallback to date comparison
   const isSessionValid = Boolean(session?.is_valid ?? (session && new Date(session.expires_at) > new Date()));
@@ -82,5 +132,8 @@ export function useKiteSession(): UseKiteSessionReturn {
     loginUrl,
     loginUrlError,
     refetch: fetchSession,
+    disconnectSession,
+    isDisconnecting,
+    sessionExpiresIn,
   };
 }

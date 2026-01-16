@@ -90,7 +90,20 @@ Deno.serve(async (req) => {
 
     if (!holdingsResponse.ok) {
       const errorText = await holdingsResponse.text()
-      throw new Error(`Kite API error: ${holdingsResponse.status} - ${errorText}`)
+      
+      // Handle specific Kite API errors with user-friendly messages
+      if (holdingsResponse.status === 403) {
+        throw new Error('Session expired. Please reconnect your Zerodha account.')
+      }
+      if (holdingsResponse.status === 401) {
+        throw new Error('Authentication failed. Please reconnect your Zerodha account.')
+      }
+      if (holdingsResponse.status === 429) {
+        throw new Error('Rate limit exceeded. Please try again in a few minutes.')
+      }
+      
+      console.error('Kite API error response:', errorText)
+      throw new Error(`Failed to fetch holdings. Please try again.`)
     }
 
     const holdingsData = await holdingsResponse.json()
