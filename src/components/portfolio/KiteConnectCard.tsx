@@ -42,9 +42,11 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
   } = useKiteSession();
   
   const [showSetup, setShowSetup] = useState(false);
+  const [isAuthRedirecting, setIsAuthRedirecting] = useState(false);
 
   const handleLogin = () => {
     if (loginUrl) {
+      setIsAuthRedirecting(true);
       window.location.href = loginUrl;
     }
   };
@@ -75,7 +77,7 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
               <CardDescription>Connect via Kite Connect API</CardDescription>
             </div>
           </div>
-          {isSessionValid ? (
+          {(isSessionValid || (zerodhaStatus && (zerodhaStatus.status === 'connected' || zerodhaStatus.status === 'success'))) ? (
             <Badge className="bg-profit/20 text-profit border-profit/30">Connected</Badge>
           ) : session ? (
             <Badge variant="destructive">Expired</Badge>
@@ -179,13 +181,24 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
               </Alert>
             )}
             
+            {session && !isSessionValid && sessionExpiresIn && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                <span>Session expired • was valid for {sessionExpiresIn}</span>
+              </div>
+            )}
+            
             <Button
               onClick={handleLogin}
-              disabled={!loginUrl}
+              disabled={!loginUrl || isAuthRedirecting}
               className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
             >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              {loginUrl ? 'Connect Zerodha' : 'Loading...'}
+              {isAuthRedirecting ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ExternalLink className="h-4 w-4 mr-2" />
+              )}
+              {loginUrl ? (isAuthRedirecting ? 'Redirecting...' : 'Connect Zerodha') : 'Loading...'}
             </Button>
 
             <Button
