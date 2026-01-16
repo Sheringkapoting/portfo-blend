@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect } from 'react';
-import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, Layers, LayoutGrid } from 'lucide-react';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, Layers, LayoutGrid, MessageSquare, Sparkles } from 'lucide-react';
 import { DashboardHeader } from '@/components/portfolio/DashboardHeader';
 import { StatCard } from '@/components/portfolio/StatCard';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
@@ -9,6 +9,8 @@ import { DataSourcePanel } from '@/components/portfolio/DataSourcePanel';
 import { PortfolioAnalytics } from '@/components/portfolio/PortfolioAnalytics';
 import { CacheStatusBadge } from '@/components/portfolio/CacheStatusBadge';
 import { KiteLoginModal } from '@/components/portfolio/KiteLoginModal';
+import { AIAssistantPanel } from '@/components/portfolio/AIAssistantPanel';
+import { AIInsightsCard } from '@/components/portfolio/AIInsightsCard';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
 import { usePortfolioCache } from '@/hooks/usePortfolioCache';
 import { useKiteSession } from '@/hooks/useKiteSession';
@@ -23,6 +25,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 const Index = () => {
   const {
@@ -54,11 +58,47 @@ const Index = () => {
 
   // View mode for holdings: 'tabbed' (by asset class tabs) or 'flat' (traditional table)
   const [holdingsView, setHoldingsView] = useState<'tabbed' | 'flat'>('tabbed');
+  
+  // AI Assistant panel state
+  const [showAIAssistant, setShowAIAssistant] = useState(false);
 
   // Check if we should show mandatory Kite login
   // Show it when there's no valid session and no holdings synced yet
   const [showMandatoryLogin, setShowMandatoryLogin] = useState(false);
   const [hasCheckedKiteOnce, setHasCheckedKiteOnce] = useState(false);
+  const hasHandledKiteRedirect = useRef(false);
+
+  // Handle Kite OAuth redirect - show toast and auto-sync
+  useEffect(() => {
+    if (hasHandledKiteRedirect.current) return;
+    
+    const params = new URLSearchParams(window.location.search);
+    const kiteConnected = params.get('kite_connected');
+    const kiteError = params.get('kite_error');
+    
+    if (kiteConnected === 'true') {
+      hasHandledKiteRedirect.current = true;
+      toast.success('Zerodha connected successfully!', {
+        description: 'Syncing your holdings now...',
+        duration: 4000,
+      });
+      
+      // Auto-sync after successful connection
+      setTimeout(() => {
+        syncZerodha();
+      }, 1000);
+      
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (kiteError) {
+      hasHandledKiteRedirect.current = true;
+      toast.error('Zerodha connection failed', {
+        description: decodeURIComponent(kiteError),
+        duration: 5000,
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [syncZerodha]);
 
   useEffect(() => {
     // Only check once after initial load
@@ -267,7 +307,12 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="analytics" className="mt-6">
-            <PortfolioAnalytics />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <PortfolioAnalytics />
+              </div>
+              <AIInsightsCard holdings={enrichedHoldings} summary={summary} />
+            </div>
           </TabsContent>
 
           <TabsContent value="sources" className="mt-6">
@@ -291,6 +336,23 @@ const Index = () => {
           </p>
         </div>
       </div>
+
+      {/* AI Assistant FAB */}
+      <Button
+        onClick={() => setShowAIAssistant(true)}
+        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-40"
+        size="icon"
+      >
+        <MessageSquare className="h-6 w-6" />
+      </Button>
+
+      {/* AI Assistant Panel */}
+      <AIAssistantPanel
+        holdings={enrichedHoldings}
+        summary={summary}
+        isOpen={showAIAssistant}
+        onClose={() => setShowAIAssistant(false)}
+      />
     </div>
   );
 };
