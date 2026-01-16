@@ -146,7 +146,11 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={disconnectSession}>
+                    <AlertDialogAction onClick={async () => {
+                      await disconnectSession();
+                      // Force page reload to reset all state
+                      window.location.reload();
+                    }}>
                       Disconnect
                     </AlertDialogAction>
                   </AlertDialogFooter>

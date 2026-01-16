@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, LayoutGrid, MessageSquare } from 'lucide-react';
 import { DashboardHeader } from '@/components/portfolio/DashboardHeader';
 import { StatCard } from '@/components/portfolio/StatCard';
@@ -14,6 +14,7 @@ import { AIInsightsCard } from '@/components/portfolio/AIInsightsCard';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
 import { usePortfolioCache } from '@/hooks/usePortfolioCache';
 import { useKiteSession } from '@/hooks/useKiteSession';
+import { useKiteOAuthHandler } from '@/hooks/useKiteOAuthHandler';
 import { sampleHoldings } from '@/data/sampleHoldings';
 import { 
   enrichHolding, 
@@ -26,7 +27,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
 
 const Index = () => {
   const {
@@ -36,7 +36,6 @@ const Index = () => {
     lastSync,
     syncStatus,
     syncZerodha,
-    syncZerodhaWithRetry,
     uploadINDMoneyExcel,
     refetch,
   } = usePortfolioData();
@@ -68,140 +67,17 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState('holdings');
 
   // Check if we should show mandatory Kite login
-  // Show it when there's no valid session and no holdings synced yet
   const [showMandatoryLogin, setShowMandatoryLogin] = useState(false);
   const [hasCheckedKiteOnce, setHasCheckedKiteOnce] = useState(false);
-  const hasHandledKiteRedirect = useRef(false);
-  const hasAutoSyncedOnValidSession = useRef(false);
 
-  // Handle Kite OAuth redirect - show toast, auto-sync, and switch to sources tab
-  useEffect(() => {
-    if (hasHandledKiteRedirect.current) return;
-    
-    const params = new URLSearchParams(window.location.search);
-    const kiteConnected = params.get('kite_connected');
-    const kiteError = params.get('kite_error');
-    
-    if (kiteConnected === 'true') {
-      hasHandledKiteRedirect.current = true;
-      
-      // Clean up URL immediately
-      window.history.replaceState({}, '', window.location.pathname);
-      
-      // Persist connection flag for UX
-      try {
-        sessionStorage.setItem('kite_connected', 'true');
-        sessionStorage.setItem('kite_connected_at', String(Date.now()));
-      } catch {}
-      
-      // Switch to Data Sources tab to show sync progress
-      setActiveTab('sources');
-      
-      // Poll for session with longer wait and more attempts
-      const pollForSession = async () => {
-        console.log('[Index] Polling for Kite session after OAuth redirect...');
-        
-        // Wait longer for callback to write session (it triggers zerodha-sync which takes time)
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        let attempts = 0;
-        const maxAttempts = 15;
-        
-        const poll = async (): Promise<boolean> => {
-          attempts++;
-          console.log(`[Index] Session poll attempt ${attempts}/${maxAttempts}`);
-          
-          const sessionData = await refetchKiteSession();
-          console.log('[Index] Session poll result:', sessionData);
-          
-          if (sessionData?.is_valid) {
-            console.log('[Index] Session is valid, proceeding with sync');
-            toast.success('Zerodha connected successfully!', {
-              description: 'Your session is active.',
-              duration: 4000,
-            });
-            return true;
-          }
-          
-          if (attempts >= maxAttempts) {
-            console.log('[Index] Max attempts reached, session still not valid');
-            toast.warning('Connection may be pending', {
-              description: 'Please check Data Sources tab and sync manually if needed.',
-              duration: 5000,
-            });
-            return false;
-          }
-          
-          // Wait and try again
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          return poll();
-        };
-        
-        const sessionValid = await poll();
-        
-        if (sessionValid) {
-          // Session is valid, try to sync
-          try {
-            console.log('[Index] Starting sync after successful session poll');
-            const syncSuccess = await syncZerodhaWithRetry(5, 1000);
-            if (syncSuccess) {
-              toast.success('Portfolio synced!', {
-                description: 'Your Zerodha holdings have been imported.',
-                duration: 4000,
-              });
-              setActiveTab('holdings');
-            }
-          } catch (err) {
-            console.error('[Index] Sync error:', err);
-            toast.error('Sync failed', {
-              description: 'Please try syncing again from Data Sources.',
-            });
-          }
-        }
-      };
-      
-      pollForSession();
-    } else if (kiteError) {
-      hasHandledKiteRedirect.current = true;
-      toast.error('Zerodha connection failed', {
-        description: decodeURIComponent(kiteError),
-        duration: 5000,
-      });
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, [syncZerodhaWithRetry, refetchKiteSession]);
-
-  // If we ever detect a valid session, ensure portfolio is synced at least once
-  useEffect(() => {
-    if (!isSessionValid || hasAutoSyncedOnValidSession.current) return;
-    hasAutoSyncedOnValidSession.current = true;
-
-    const run = async () => {
-      toast.success('Zerodha session active', {
-        description: 'Syncing your portfolio holdings...',
-        duration: 4000,
-      });
-      setActiveTab('sources');
-      const ok = await syncZerodhaWithRetry(5, 800);
-      if (ok) {
-        toast.success('Portfolio synced!', {
-          description: 'Your Zerodha holdings have been imported.',
-          duration: 4000,
-        });
-        setActiveTab('holdings');
-      }
-    };
-
-    run();
-  }, [isSessionValid, syncZerodhaWithRetry]);
-
-  // After server-side sync logs success, auto-switch to Holdings
-  useEffect(() => {
-    const latestZerodha = syncStatus.find(s => s.source === 'Zerodha');
-    if (hasHandledKiteRedirect.current && latestZerodha && latestZerodha.status === 'success') {
-      setActiveTab('holdings');
-    }
-  }, [syncStatus]);
+  // Handle OAuth redirect with new dedicated hook
+  useKiteOAuthHandler({
+    onSessionReady: syncZerodha,
+    onSwitchToHoldings: () => setActiveTab('holdings'),
+    onSwitchToSources: () => setActiveTab('sources'),
+    refetchSession: refetchKiteSession,
+    refetchHoldings: refetch,
+  });
 
   useEffect(() => {
     // Only check once after initial load
