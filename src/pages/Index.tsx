@@ -72,6 +72,7 @@ const Index = () => {
   const [showMandatoryLogin, setShowMandatoryLogin] = useState(false);
   const [hasCheckedKiteOnce, setHasCheckedKiteOnce] = useState(false);
   const hasHandledKiteRedirect = useRef(false);
+  const hasAutoSyncedOnValidSession = useRef(false);
 
   // Handle Kite OAuth redirect - show toast, auto-sync, and switch to sources tab
   useEffect(() => {
@@ -162,6 +163,30 @@ const Index = () => {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [syncZerodha, refetchKiteSession]);
+
+  // If we ever detect a valid session, ensure portfolio is synced at least once
+  useEffect(() => {
+    if (!isSessionValid || hasAutoSyncedOnValidSession.current) return;
+    hasAutoSyncedOnValidSession.current = true;
+
+    const run = async () => {
+      toast.success('Zerodha session active', {
+        description: 'Syncing your portfolio holdings...',
+        duration: 4000,
+      });
+      setActiveTab('sources');
+      const ok = await syncZerodhaWithRetry(5, 800);
+      if (ok) {
+        toast.success('Portfolio synced!', {
+          description: 'Your Zerodha holdings have been imported.',
+          duration: 4000,
+        });
+        setActiveTab('holdings');
+      }
+    };
+
+    run();
+  }, [isSessionValid, syncZerodhaWithRetry]);
 
   // After server-side sync logs success, auto-switch to Holdings
   useEffect(() => {

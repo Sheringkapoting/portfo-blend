@@ -42,9 +42,11 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
   } = useKiteSession();
   
   const [showSetup, setShowSetup] = useState(false);
+  const [isAuthRedirecting, setIsAuthRedirecting] = useState(false);
 
   const handleLogin = () => {
     if (loginUrl) {
+      setIsAuthRedirecting(true);
       window.location.href = loginUrl;
     }
   };
@@ -188,11 +190,15 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
             
             <Button
               onClick={handleLogin}
-              disabled={!loginUrl}
+              disabled={!loginUrl || isAuthRedirecting}
               className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
             >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              {loginUrl ? 'Connect Zerodha' : 'Loading...'}
+              {isAuthRedirecting ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ExternalLink className="h-4 w-4 mr-2" />
+              )}
+              {loginUrl ? (isAuthRedirecting ? 'Redirecting...' : 'Connect Zerodha') : 'Loading...'}
             </Button>
 
             <Button
