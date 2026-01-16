@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
-import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, Layers, LayoutGrid, MessageSquare, Sparkles } from 'lucide-react';
+import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, LayoutGrid, MessageSquare } from 'lucide-react';
 import { DashboardHeader } from '@/components/portfolio/DashboardHeader';
 import { StatCard } from '@/components/portfolio/StatCard';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
@@ -54,6 +54,7 @@ const Index = () => {
     loginUrl,
     loginUrlError,
     isLoading: isKiteLoading,
+    refetch: refetchKiteSession,
   } = useKiteSession();
 
   // View mode for holdings: 'tabbed' (by asset class tabs) or 'flat' (traditional table)
@@ -62,13 +63,16 @@ const Index = () => {
   // AI Assistant panel state
   const [showAIAssistant, setShowAIAssistant] = useState(false);
 
+  // Active tab state - controlled to allow programmatic switching
+  const [activeTab, setActiveTab] = useState('holdings');
+
   // Check if we should show mandatory Kite login
   // Show it when there's no valid session and no holdings synced yet
   const [showMandatoryLogin, setShowMandatoryLogin] = useState(false);
   const [hasCheckedKiteOnce, setHasCheckedKiteOnce] = useState(false);
   const hasHandledKiteRedirect = useRef(false);
 
-  // Handle Kite OAuth redirect - show toast and auto-sync
+  // Handle Kite OAuth redirect - show toast, auto-sync, and switch to sources tab
   useEffect(() => {
     if (hasHandledKiteRedirect.current) return;
     
@@ -78,15 +82,34 @@ const Index = () => {
     
     if (kiteConnected === 'true') {
       hasHandledKiteRedirect.current = true;
+      
+      // Refetch kite session status
+      refetchKiteSession();
+      
       toast.success('Zerodha connected successfully!', {
-        description: 'Syncing your holdings now...',
-        duration: 4000,
+        description: 'Syncing your portfolio holdings...',
+        duration: 5000,
       });
       
+      // Switch to Data Sources tab to show sync progress
+      setActiveTab('sources');
+      
       // Auto-sync after successful connection
-      setTimeout(() => {
-        syncZerodha();
-      }, 1000);
+      setTimeout(async () => {
+        try {
+          await syncZerodha();
+          toast.success('Portfolio synced!', {
+            description: 'Your Zerodha holdings have been imported.',
+            duration: 4000,
+          });
+          // Switch to holdings tab after successful sync
+          setActiveTab('holdings');
+        } catch (err) {
+          toast.error('Sync failed', {
+            description: 'Please try syncing again from Data Sources.',
+          });
+        }
+      }, 1500);
       
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
@@ -98,7 +121,7 @@ const Index = () => {
       });
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [syncZerodha]);
+  }, [syncZerodha, refetchKiteSession]);
 
   useEffect(() => {
     // Only check once after initial load
@@ -235,7 +258,7 @@ const Index = () => {
         </div>
 
         {/* Main Content Tabs */}
-        <Tabs defaultValue="holdings" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-muted/50 border border-border">
             <TabsTrigger value="holdings" className="gap-2 data-[state=active]:bg-card">
               <Briefcase className="h-4 w-4" />

@@ -1,21 +1,23 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ExternalLink, CheckCircle2, AlertCircle, RefreshCw, Info, CloudDownload } from 'lucide-react';
+import { ExternalLink, CheckCircle2, AlertCircle, RefreshCw, Info, CloudDownload, LogOut, Clock, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
-
-interface KiteSession {
-  id: string;
-  expires_at: string;
-  created_at: string;
-  updated_at: string;
-  user_id: string | null;
-  token_type: string | null;
-  is_valid: boolean;
-}
+import { useKiteSession } from '@/hooks/useKiteSession';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface KiteConnectCardProps {
   onSyncZerodha: () => Promise<void>;
@@ -28,68 +30,18 @@ interface KiteConnectCardProps {
 }
 
 export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: KiteConnectCardProps) {
-  const [session, setSession] = useState<KiteSession | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    session,
+    isLoading,
+    isSessionValid,
+    loginUrl,
+    loginUrlError,
+    disconnectSession,
+    isDisconnecting,
+    sessionExpiresIn,
+  } = useKiteSession();
+  
   const [showSetup, setShowSetup] = useState(false);
-  const [loginUrl, setLoginUrl] = useState<string | null>(null);
-  const [loginUrlError, setLoginUrlError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchSession();
-    fetchLoginUrl();
-    
-    // Check if redirected from Kite OAuth
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('kite_connected') === 'true') {
-      fetchSession();
-      // Clean up URL
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
-
-  const fetchLoginUrl = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('kite-login-url');
-      if (error) {
-        console.error('Error fetching login URL:', error);
-        setLoginUrlError('Failed to get login URL. Check API key configuration.');
-        return;
-      }
-      if (data?.loginUrl) {
-        setLoginUrl(data.loginUrl);
-      } else if (data?.error) {
-        setLoginUrlError(data.error);
-      }
-    } catch (e) {
-      console.error('Error fetching login URL:', e);
-      setLoginUrlError('Failed to connect to server.');
-    }
-  };
-
-  const fetchSession = async () => {
-    try {
-      // Use the kite_sessions_status view which doesn't expose access_token
-      const { data, error } = await supabase
-        .from('kite_sessions_status')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (!error && data && data.length > 0) {
-        setSession(data[0]);
-      } else {
-        setSession(null);
-      }
-    } catch (e) {
-      console.error('Error fetching Kite session:', e);
-      setSession(null);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Use the is_valid field from the view, fallback to date comparison
-  const isSessionValid = session?.is_valid ?? (session && new Date(session.expires_at) > new Date());
 
   const handleLogin = () => {
     if (loginUrl) {
@@ -135,11 +87,17 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
       <CardContent className="space-y-4">
         {isSessionValid ? (
           <>
-            <div className="text-sm text-muted-foreground space-y-1">
+            <div className="text-sm text-muted-foreground space-y-2">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-profit" />
-                <span>Session valid until {new Date(session!.expires_at).toLocaleTimeString('en-IN')}</span>
+                <span>Session active</span>
               </div>
+              {sessionExpiresIn && (
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>Expires in {sessionExpiresIn}</span>
+                </div>
+              )}
               {zerodhaStatus?.status === 'success' && (
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-profit" />
@@ -147,18 +105,59 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
                 </div>
               )}
             </div>
-            <Button
-              onClick={onSyncZerodha}
-              disabled={isSyncing}
-              className="w-full bg-orange-500 hover:bg-orange-600"
-            >
-              {isSyncing ? (
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Sync Holdings
-            </Button>
+            
+            <div className="flex gap-2">
+              <Button
+                onClick={onSyncZerodha}
+                disabled={isSyncing}
+                className="flex-1 bg-orange-500 hover:bg-orange-600"
+              >
+                {isSyncing ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Sync Holdings
+              </Button>
+              
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    disabled={isDisconnecting}
+                    className="shrink-0"
+                  >
+                    {isDisconnecting ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogOut className="h-4 w-4" />
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Disconnect Zerodha?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will terminate your Zerodha session. Your synced holdings will remain, but you'll need to reconnect to sync again.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={disconnectSession}>
+                      Disconnect
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
+            <Alert className="border-muted bg-muted/20">
+              <Shield className="h-4 w-4 text-muted-foreground" />
+              <AlertDescription className="text-xs text-muted-foreground">
+                Your Zerodha credentials are never stored. The session token expires daily for security.
+              </AlertDescription>
+            </Alert>
           </>
         ) : (
           <>
@@ -175,7 +174,7 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
                 <AlertCircle className="h-4 w-4 text-orange-500" />
                 <AlertTitle className="text-sm">Daily Login Required</AlertTitle>
                 <AlertDescription className="text-xs text-muted-foreground">
-                  Kite tokens expire daily. Click below to connect your Zerodha account.
+                  Kite tokens expire daily for security. Click below to connect your Zerodha account securely.
                 </AlertDescription>
               </Alert>
             )}
@@ -229,3 +228,4 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus }: Kit
     </Card>
   );
 }
+
