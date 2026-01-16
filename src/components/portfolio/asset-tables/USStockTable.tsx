@@ -112,7 +112,7 @@ export function USStockTable({ holdings }: USStockTableProps) {
     },
     {
       accessorKey: 'investedValue',
-      header: () => <span className="text-right block">Invested</span>,
+      header: () => <span className="text-right block">Invested Amount</span>,
       size: 140,
       cell: ({ getValue }) => {
         const inrValue = getValue() as number;
@@ -131,7 +131,7 @@ export function USStockTable({ holdings }: USStockTableProps) {
     },
     {
       accessorKey: 'currentValue',
-      header: () => <span className="text-right block">Current</span>,
+      header: () => <span className="text-right block">Current Value</span>,
       size: 140,
       cell: ({ getValue }) => {
         const inrValue = getValue() as number;

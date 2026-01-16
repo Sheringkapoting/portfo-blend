@@ -30,7 +30,10 @@ export type AssetType =
   | 'US Stock' 
   | 'Mutual Fund'
   | 'Bond'
-  | 'REIT';
+  | 'REIT'
+  | 'NPS'
+  | 'EPF'
+  | 'PPF';
 
 export type Sector = 
   | 'IT'
@@ -53,7 +56,7 @@ export type Sector =
   | 'Chemicals'
   | 'Other';
 
-export type Source = 'Zerodha' | 'INDMoney';
+export type Source = string;
 
 export type Recommendation = 
   | 'HOLD'

@@ -74,13 +74,13 @@ export function GroupedRow({
 
             <div className="flex items-center gap-6 text-sm">
               <div className="text-right">
-                <span className="text-muted-foreground text-xs">Invested</span>
+                <span className="text-muted-foreground text-xs">Invested Amount</span>
                 <p className="font-mono-numbers font-medium">
                   {formatCurrency(summary.investedValue, true)}
                 </p>
               </div>
               <div className="text-right">
-                <span className="text-muted-foreground text-xs">Current</span>
+                <span className="text-muted-foreground text-xs">Current Value</span>
                 <p className="font-mono-numbers font-medium">
                   {formatCurrency(summary.currentValue, true)}
                 </p>

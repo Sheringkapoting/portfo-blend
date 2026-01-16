@@ -18,6 +18,9 @@ const ASSET_ORDER: AssetType[] = [
   'REIT',
   'Commodity',
   'Index',
+  'NPS',
+  'EPF',
+  'PPF',
 ];
 
 export function AssetClassHoldings({ holdings }: AssetClassHoldingsProps) {

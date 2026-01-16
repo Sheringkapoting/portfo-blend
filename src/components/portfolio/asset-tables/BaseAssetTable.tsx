@@ -10,6 +10,7 @@ import {
   ColumnDef,
   ColumnFiltersState,
   ColumnSizingState,
+  FilterFn,
 } from '@tanstack/react-table';
 import { ArrowUpDown, ArrowUp, ArrowDown, Search, Filter, X, GripVertical } from 'lucide-react';
 import { EnrichedHolding } from '@/types/portfolio';
@@ -59,6 +60,33 @@ const SORT_PRESETS: Record<SortPreset, { label: string; sorting: SortingState }>
 
 const MIN_COLUMN_WIDTH = 60;
 const DEFAULT_COLUMN_WIDTH = 120;
+
+const globalSearchFn: FilterFn<EnrichedHolding> = (row, _columnId, filterValue) => {
+  const query = String(filterValue || '').trim().toLowerCase();
+  if (!query) return true;
+
+  try {
+    const h = row.original;
+    if (!h) return true;
+
+    const text = [
+      h.name,
+      h.symbol,
+      h.sector,
+      h.type,
+      h.source,
+      h.exchange,
+      h.isin,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    return text.includes(query);
+  } catch {
+    return true;
+  }
+};
 
 export function BaseAssetTable<T extends EnrichedHolding>({
   holdings,
@@ -167,6 +195,7 @@ export function BaseAssetTable<T extends EnrichedHolding>({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    globalFilterFn: globalSearchFn,
     enableColumnResizing,
     columnResizeMode: 'onChange',
   });

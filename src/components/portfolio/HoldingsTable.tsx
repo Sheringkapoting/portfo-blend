@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useTableGrouping } from '@/hooks/useTableGrouping';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const ITEMS_PER_PAGE = 15;
 
@@ -41,8 +42,8 @@ const COLUMN_LABELS: Record<string, string> = {
   quantity: 'Qty',
   avgPrice: 'Avg Price',
   ltp: 'LTP',
-  investedValue: 'Invested',
-  currentValue: 'Current',
+  investedValue: 'Invested Amount',
+  currentValue: 'Current Value',
   pnl: 'P&L',
   pnlPercent: 'P&L %',
   recommendation: 'Action',
@@ -415,7 +416,54 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
           className="justify-end"
         />
       ),
-      cell: ({ getValue }) => {
+      cell: ({ row, getValue }) => {
+        const holding = row.original;
+        const isMutualFund = holding.type === 'Mutual Fund';
+        const actualXirr = holding.xirr;
+        const hasActualXirr = actualXirr !== undefined && actualXirr !== null;
+        const isFromExcel = holding.source === 'INDMoney';
+
+        if (isMutualFund) {
+          if (!hasActualXirr) {
+            return (
+              <span className="font-mono-numbers text-sm font-semibold text-right block text-muted-foreground">
+                -
+              </span>
+            );
+          }
+
+          const isProfitXirr = actualXirr >= 0;
+
+          return (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className={cn(
+                      "font-mono-numbers text-sm font-semibold text-right block cursor-help",
+                      isProfitXirr ? "text-profit" : "text-loss"
+                    )}
+                  >
+                    {isProfitXirr ? '+' : ''}{actualXirr.toFixed(2)}%
+                    {isFromExcel && (
+                      <span className="ml-1 text-[0.6rem] uppercase tracking-wide text-muted-foreground">
+                        IND
+                      </span>
+                    )}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs max-w-[220px]">
+                    {isFromExcel
+                      ? 'XIRR imported from your INDMoney Excel file'
+                      : 'XIRR value from portfolio data'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          );
+        }
+
         const percent = getValue() as number;
         const isProfit = percent >= 0;
         return (
@@ -442,7 +490,7 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
         />
       ),
       cell: ({ getValue }) => (
-        <RecommendationBadge recommendation={getValue() as any} />
+        <RecommendationBadge recommendation={getValue() as Recommendation} />
       ),
     },
     {
@@ -459,7 +507,7 @@ export function HoldingsTable({ holdings }: HoldingsTableProps) {
         />
       ),
       cell: ({ getValue }) => (
-        <SourceBadge source={getValue() as any} />
+        <SourceBadge source={getValue() as Source} />
       ),
     },
   ], [groupBy]);

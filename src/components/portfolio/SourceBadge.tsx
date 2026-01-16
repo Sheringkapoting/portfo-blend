@@ -7,16 +7,17 @@ interface SourceBadgeProps {
 }
 
 export function SourceBadge({ source, className }: SourceBadgeProps) {
+  const label = source;
   return (
     <span
       className={cn(
         "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
-        source === 'Zerodha' && "bg-zerodha/10 text-zerodha",
-        source === 'INDMoney' && "bg-indmoney/10 text-indmoney",
+        label === 'Zerodha' && "bg-zerodha/10 text-zerodha",
+        label === 'INDMoney' && "bg-indmoney/10 text-indmoney",
         className
       )}
     >
-      {source}
+      {label}
     </span>
   );
 }

@@ -37,20 +37,25 @@ export function usePortfolioData() {
       const quotesMap = new Map(quotes?.map(q => [q.symbol, q.ltp]) || []);
 
       // Transform database holdings to our format
-      const transformed: Holding[] = (data || []).map(h => ({
-        id: h.id,
-        symbol: h.symbol,
-        name: h.name,
-        type: h.type as any,
-        sector: h.sector as any,
-        quantity: Number(h.quantity),
-        avgPrice: Number(h.avg_price),
-        ltp: quotesMap.get(h.symbol) || Number(h.ltp),
-        exchange: h.exchange,
-        source: h.source as any,
-        isin: h.isin || undefined,
-        xirr: h.xirr !== null ? Number(h.xirr) : undefined,
-      }));
+      const transformed: Holding[] = (data || []).map(h => {
+        const broker = (h as any).broker as string | undefined;
+        const source = String(h.source || '').trim() || 'Unknown';
+
+        return {
+          id: h.id,
+          symbol: h.symbol,
+          name: h.name,
+          type: h.type as any,
+          sector: h.sector as any,
+          quantity: Number(h.quantity),
+          avgPrice: Number(h.avg_price),
+          ltp: quotesMap.get(h.symbol) || Number(h.ltp),
+          exchange: h.exchange,
+          source: broker || source,
+          isin: h.isin || undefined,
+          xirr: h.xirr !== null ? Number(h.xirr) : undefined,
+        };
+      });
 
       setHoldings(transformed.map(enrichHolding));
       setIsLoading(false);

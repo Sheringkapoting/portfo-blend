@@ -45,6 +45,9 @@ const ASSET_CONFIG: Record<AssetType, { icon: any; color: string; bgColor: strin
   'US Stock': { icon: Globe, color: 'text-indigo-500', bgColor: 'bg-indigo-500/10' },
   'Bond': { icon: Landmark, color: 'text-emerald-500', bgColor: 'bg-emerald-500/10' },
   'REIT': { icon: Home, color: 'text-pink-500', bgColor: 'bg-pink-500/10' },
+  'NPS': { icon: Shield, color: 'text-indigo-600', bgColor: 'bg-indigo-600/10' },
+  'EPF': { icon: Briefcase, color: 'text-amber-600', bgColor: 'bg-amber-600/10' },
+  'PPF': { icon: Wallet, color: 'text-teal-600', bgColor: 'bg-teal-600/10' },
 };
 
 // Columns that are specific to certain asset types
@@ -58,6 +61,9 @@ const ASSET_SPECIFIC_COLUMNS: Record<AssetType, string[]> = {
   'US Stock': ['symbol', 'quantity', 'avgPrice', 'ltp', 'investedValue', 'currentValue', 'pnl', 'pnlPercent'],
   'Bond': ['symbol', 'quantity', 'avgPrice', 'ltp', 'investedValue', 'currentValue', 'pnl', 'pnlPercent'],
   'REIT': ['symbol', 'sector', 'quantity', 'avgPrice', 'ltp', 'investedValue', 'currentValue', 'pnl', 'pnlPercent'],
+  'NPS': ['symbol', 'investedValue', 'currentValue', 'pnl', 'pnlPercent'],
+  'EPF': ['symbol', 'investedValue', 'currentValue', 'pnl', 'pnlPercent'],
+  'PPF': ['symbol', 'investedValue', 'currentValue', 'pnl', 'pnlPercent'],
 };
 
 export function AssetClassTable({ assetType, holdings, delay = 0 }: AssetClassTableProps) {
@@ -112,12 +118,12 @@ export function AssetClassTable({ assetType, holdings, delay = 0 }: AssetClassTa
       },
       investedValue: {
         accessorKey: 'investedValue',
-        header: ({ column }) => <SortableHeader column={column} label="Invested" className="justify-end" />,
+        header: ({ column }) => <SortableHeader column={column} label="Invested Amount" className="justify-end" />,
         cell: ({ getValue }) => <span className="font-mono-numbers text-sm text-right block">{formatCurrency(getValue() as number, true)}</span>,
       },
       currentValue: {
         accessorKey: 'currentValue',
-        header: ({ column }) => <SortableHeader column={column} label="Current" className="justify-end" />,
+        header: ({ column }) => <SortableHeader column={column} label="Current Value" className="justify-end" />,
         cell: ({ getValue }) => <span className="font-mono-numbers text-sm font-medium text-right block">{formatCurrency(getValue() as number, true)}</span>,
       },
       pnl: {
@@ -205,11 +211,11 @@ export function AssetClassTable({ assetType, holdings, delay = 0 }: AssetClassTa
 
           <div className="flex items-center gap-6 text-sm">
             <div className="text-right hidden sm:block">
-              <span className="text-xs text-muted-foreground">Invested</span>
+              <span className="text-xs text-muted-foreground">Invested Amount</span>
               <p className="font-mono-numbers font-medium">{formatCurrency(summary.totalInvested, true)}</p>
             </div>
             <div className="text-right hidden md:block">
-              <span className="text-xs text-muted-foreground">Current</span>
+              <span className="text-xs text-muted-foreground">Current Value</span>
               <p className="font-mono-numbers font-medium">{formatCurrency(summary.totalCurrent, true)}</p>
             </div>
             <div className="text-right">

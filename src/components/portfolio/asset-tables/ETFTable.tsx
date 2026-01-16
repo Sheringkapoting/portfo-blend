@@ -56,7 +56,7 @@ export function ETFTable({ holdings }: ETFTableProps) {
     },
     {
       accessorKey: 'investedValue',
-      header: () => <span className="text-right block">Invested</span>,
+      header: () => <span className="text-right block">Invested Amount</span>,
       cell: ({ getValue }) => (
         <span className="font-mono text-sm text-right block">
           {formatCurrency(getValue() as number, true)}
@@ -65,7 +65,7 @@ export function ETFTable({ holdings }: ETFTableProps) {
     },
     {
       accessorKey: 'currentValue',
-      header: () => <span className="text-right block">Current</span>,
+      header: () => <span className="text-right block">Current Value</span>,
       cell: ({ getValue }) => (
         <span className="font-mono text-sm font-medium text-right block">
           {formatCurrency(getValue() as number, true)}
