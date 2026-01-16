@@ -42,35 +42,53 @@ Deno.serve(async (req) => {
       throw new Error('Kite API key not configured')
     }
 
-    // Try to get access token from stored session first
+    // Try to get access token from stored session
+    // Priority: 1) User's own session, 2) Any valid session (for null user_id cases), 3) Env variable
     let accessToken = ''
-    let sessionQuery = supabase
-      .from('kite_sessions')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      
-    // If user is authenticated, get their session
+    let finalSession = null
+    
+    // First, try to get user-specific session
     if (authResult.userId) {
-      sessionQuery = sessionQuery.eq('user_id', authResult.userId)
+      const { data: userSession } = await supabase
+        .from('kite_sessions')
+        .select('*')
+        .eq('user_id', authResult.userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      
+      if (userSession && new Date(userSession.expires_at) > new Date()) {
+        finalSession = userSession
+      }
     }
     
-    const { data: session, error: sessionError } = await sessionQuery.single()
-    
-    // If user-specific session not found, try to get any valid session (for migration)
-    let finalSession = session
-    if (!session && authResult.userId) {
+    // If no user-specific session, try to get the most recent valid session (may have null user_id)
+    if (!finalSession) {
       const { data: anySession } = await supabase
         .from('kite_sessions')
         .select('*')
+        .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
         .limit(1)
-        .single()
-      finalSession = anySession
+        .maybeSingle()
+      
+      if (anySession) {
+        finalSession = anySession
+        
+        // Update the session to associate with this user for future queries
+        if (authResult.userId && !anySession.user_id) {
+          await supabase
+            .from('kite_sessions')
+            .update({ user_id: authResult.userId })
+            .eq('id', anySession.id)
+          console.log('Associated orphan session with user:', authResult.userId)
+        }
+      }
     }
 
-    if (finalSession && new Date(finalSession.expires_at) > new Date()) {
+    if (finalSession) {
       accessToken = finalSession.access_token
+      console.log('Using session:', finalSession.id, 'expires:', finalSession.expires_at)
     } else {
       // Fall back to environment variable (for backward compatibility)
       accessToken = Deno.env.get('KITE_ACCESS_TOKEN') || ''
