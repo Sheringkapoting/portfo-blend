@@ -83,9 +83,6 @@ const Index = () => {
     if (kiteConnected === 'true') {
       hasHandledKiteRedirect.current = true;
       
-      // Refetch kite session status
-      refetchKiteSession();
-      
       toast.success('Zerodha connected successfully!', {
         description: 'Syncing your portfolio holdings...',
         duration: 5000,
@@ -94,25 +91,62 @@ const Index = () => {
       // Switch to Data Sources tab to show sync progress
       setActiveTab('sources');
       
-      // Auto-sync after successful connection
-      setTimeout(async () => {
-        try {
-          await syncZerodha();
-          toast.success('Portfolio synced!', {
-            description: 'Your Zerodha holdings have been imported.',
-            duration: 4000,
-          });
-          // Switch to holdings tab after successful sync
-          setActiveTab('holdings');
-        } catch (err) {
-          toast.error('Sync failed', {
-            description: 'Please try syncing again from Data Sources.',
-          });
-        }
-      }, 1500);
-      
-      // Clean up URL
+      // Clean up URL immediately
       window.history.replaceState({}, '', window.location.pathname);
+      
+      // Wait for session to be available, then auto-sync
+      const performSync = async () => {
+        // Wait a bit for the callback to complete writing the session
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Refetch session to get latest state
+        const sessionData = await refetchKiteSession();
+        
+        if (sessionData?.is_valid) {
+          try {
+            await syncZerodha();
+            toast.success('Portfolio synced!', {
+              description: 'Your Zerodha holdings have been imported.',
+              duration: 4000,
+            });
+            // Switch to holdings tab after successful sync
+            setActiveTab('holdings');
+          } catch (err) {
+            toast.error('Sync failed', {
+              description: 'Please try syncing again from Data Sources.',
+            });
+          }
+        } else {
+          // Keep polling for session
+          let attempts = 0;
+          const checkSession = setInterval(async () => {
+            attempts++;
+            const session = await refetchKiteSession();
+            if (session?.is_valid) {
+              clearInterval(checkSession);
+              try {
+                await syncZerodha();
+                toast.success('Portfolio synced!', {
+                  description: 'Your Zerodha holdings have been imported.',
+                  duration: 4000,
+                });
+                setActiveTab('holdings');
+              } catch (err) {
+                toast.error('Sync failed', {
+                  description: 'Please try syncing again from Data Sources.',
+                });
+              }
+            } else if (attempts >= 10) {
+              clearInterval(checkSession);
+              toast.error('Session not ready', {
+                description: 'Please try syncing manually from Data Sources.',
+              });
+            }
+          }, 1000);
+        }
+      };
+      
+      performSync();
     } else if (kiteError) {
       hasHandledKiteRedirect.current = true;
       toast.error('Zerodha connection failed', {
