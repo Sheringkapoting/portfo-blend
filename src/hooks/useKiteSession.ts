@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -18,8 +18,8 @@ interface UseKiteSessionReturn {
   isSessionValid: boolean;
   loginUrl: string | null;
   loginUrlError: string | null;
-  refetch: () => Promise<void>;
-  disconnectSession: () => Promise<void>;
+  refetch: () => Promise<KiteSession | null>;
+  disconnectSession: () => Promise<boolean>;
   isDisconnecting: boolean;
   sessionExpiresIn: string | null;
 }
@@ -30,8 +30,9 @@ export function useKiteSession(): UseKiteSessionReturn {
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const [loginUrlError, setLoginUrlError] = useState<string | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchSession = useCallback(async () => {
+  const fetchSession = useCallback(async (): Promise<KiteSession | null> => {
     try {
       // Use the kite_sessions_status view which doesn't expose access_token
       const { data, error } = await supabase
@@ -41,13 +42,17 @@ export function useKiteSession(): UseKiteSessionReturn {
         .limit(1);
 
       if (!error && data && data.length > 0) {
-        setSession(data[0]);
+        const sessionData = data[0] as KiteSession;
+        setSession(sessionData);
+        return sessionData;
       } else {
         setSession(null);
+        return null;
       }
     } catch (e) {
       console.error('Error fetching Kite session:', e);
       setSession(null);
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -63,6 +68,7 @@ export function useKiteSession(): UseKiteSessionReturn {
       }
       if (data?.loginUrl) {
         setLoginUrl(data.loginUrl);
+        setLoginUrlError(null);
       } else if (data?.error) {
         setLoginUrlError(data.error);
       }
@@ -73,35 +79,76 @@ export function useKiteSession(): UseKiteSessionReturn {
   }, []);
 
   // Disconnect/invalidate the current Kite session
-  const disconnectSession = useCallback(async () => {
-    if (!session) return;
+  const disconnectSession = useCallback(async (): Promise<boolean> => {
+    if (!session) return false;
     
     setIsDisconnecting(true);
     try {
-      const { error } = await supabase.functions.invoke('kite-disconnect');
+      const { data, error } = await supabase.functions.invoke('kite-disconnect');
       
       if (error) {
         throw new Error(error.message);
       }
       
-      setSession(null);
-      toast.success('Zerodha disconnected', {
-        description: 'Your Zerodha session has been terminated.',
-      });
+      if (data?.success) {
+        setSession(null);
+        toast.success('Zerodha disconnected', {
+          description: 'Your Zerodha session has been terminated.',
+        });
+        return true;
+      } else {
+        throw new Error(data?.error || 'Failed to disconnect');
+      }
     } catch (e) {
       console.error('Error disconnecting Kite session:', e);
       toast.error('Failed to disconnect', {
         description: 'Please try again.',
       });
+      return false;
     } finally {
       setIsDisconnecting(false);
     }
   }, [session]);
 
+  // Start polling for session after OAuth redirect
+  const startPollingForSession = useCallback(() => {
+    // Clear any existing interval
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+    }
+    
+    let attempts = 0;
+    const maxAttempts = 10;
+    
+    pollIntervalRef.current = setInterval(async () => {
+      attempts++;
+      const sessionData = await fetchSession();
+      
+      if (sessionData?.is_valid || attempts >= maxAttempts) {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
+    }, 1000);
+  }, [fetchSession]);
+
   useEffect(() => {
     fetchSession();
     fetchLoginUrl();
-  }, [fetchSession, fetchLoginUrl]);
+    
+    // Check if returning from OAuth and start polling
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('kite_connected') === 'true') {
+      startPollingForSession();
+    }
+    
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [fetchSession, fetchLoginUrl, startPollingForSession]);
 
   // Calculate time until session expires
   const sessionExpiresIn = session?.expires_at
