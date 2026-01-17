@@ -143,11 +143,30 @@ Deno.serve(async (req) => {
     }))
 
     // Delete existing Zerodha holdings for this user and insert new ones
-    const deleteQuery = supabase.from('holdings').delete().eq('source', 'Zerodha')
+    // Build delete query properly - need to await properly with correct chaining
     if (authResult.userId) {
-      deleteQuery.eq('user_id', authResult.userId)
+      // Delete only this user's Zerodha holdings
+      const { error: deleteError } = await supabase
+        .from('holdings')
+        .delete()
+        .eq('source', 'Zerodha')
+        .eq('user_id', authResult.userId)
+      
+      if (deleteError) {
+        console.error('Delete error:', deleteError)
+      }
+    } else {
+      // Fallback: delete Zerodha holdings with null user_id
+      const { error: deleteError } = await supabase
+        .from('holdings')
+        .delete()
+        .eq('source', 'Zerodha')
+        .is('user_id', null)
+      
+      if (deleteError) {
+        console.error('Delete error:', deleteError)
+      }
     }
-    await deleteQuery
     
     if (holdings.length > 0) {
       const { error: insertError } = await supabase.from('holdings').insert(holdings)
