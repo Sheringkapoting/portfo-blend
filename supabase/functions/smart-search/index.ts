@@ -1,7 +1,6 @@
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { corsHeaders } from '../_shared/cors.ts'
+import { authenticateUser } from '../_shared/auth.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -9,12 +8,29 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Authenticate the user
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    )
+
+    const { user, error: authError } = await authenticateUser(supabase)
+    if (authError) {
+      return new Response(
+        JSON.stringify({ error: authError.message }),
+        { status: authError.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const { query, holdings } = await req.json()
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
     
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured')
     }
+
+    console.log(`Smart search requested by user: ${user.id}, query: "${query}"`)
 
     const systemPrompt = `You are a smart search assistant for an investment portfolio. Given a natural language query and portfolio holdings data, determine which holdings match the user's intent.
 

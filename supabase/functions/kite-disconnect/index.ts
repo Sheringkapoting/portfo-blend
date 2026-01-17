@@ -82,11 +82,12 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    const status = error instanceof Error && 'status' in error ? (error as { status: number }).status : 500
     console.error('Kite disconnect error:', errorMessage)
     
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
-      { status: error.status || 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: status || 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
