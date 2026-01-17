@@ -72,9 +72,13 @@ const Index = () => {
   // Active tab state - controlled to allow programmatic switching
   const [activeTab, setActiveTab] = useState('holdings');
 
-  // Check if we should show mandatory Kite login
-  const [showMandatoryLogin, setShowMandatoryLogin] = useState(false);
-  const [hasCheckedKiteOnce, setHasCheckedKiteOnce] = useState(false);
+  // Check if we should show optional data source modal (not mandatory)
+  const [showDataSourceModal, setShowDataSourceModal] = useState(false);
+  const [hasCheckedInitialState, setHasCheckedInitialState] = useState(false);
+  const [hasUserDismissedModal, setHasUserDismissedModal] = useState(() => {
+    // Check if user previously dismissed the modal
+    return localStorage.getItem('portfolio_modal_dismissed') === 'true';
+  });
 
   // Handle OAuth redirect with new dedicated hook
   const { progress: oauthProgress } = useKiteOAuthHandler({
@@ -87,25 +91,38 @@ const Index = () => {
 
   useEffect(() => {
     // Only check once after initial load
-    if (!isKiteLoading && !isLoading && !hasCheckedKiteOnce) {
-      setHasCheckedKiteOnce(true);
-      // Show mandatory login if no valid session and no holdings
-      if (!isSessionValid && liveHoldings.length === 0) {
+    if (!isKiteLoading && !isLoading && !hasCheckedInitialState) {
+      setHasCheckedInitialState(true);
+      // Show data source modal if no holdings and user hasn't dismissed it before
+      if (liveHoldings.length === 0 && !hasUserDismissedModal) {
         // Check if user just came back from Kite OAuth
         const params = new URLSearchParams(window.location.search);
         if (!params.get('kite_connected')) {
-          setShowMandatoryLogin(true);
+          setShowDataSourceModal(true);
         }
       }
     }
-  }, [isKiteLoading, isLoading, isSessionValid, liveHoldings.length, hasCheckedKiteOnce]);
+  }, [isKiteLoading, isLoading, liveHoldings.length, hasCheckedInitialState, hasUserDismissedModal]);
 
-  // Hide modal when session becomes valid
+  // Hide modal when session becomes valid or holdings are loaded
   useEffect(() => {
-    if (isSessionValid) {
-      setShowMandatoryLogin(false);
+    if (isSessionValid || liveHoldings.length > 0) {
+      setShowDataSourceModal(false);
     }
-  }, [isSessionValid]);
+  }, [isSessionValid, liveHoldings.length]);
+
+  // Handle modal dismiss
+  const handleDismissModal = () => {
+    setShowDataSourceModal(false);
+    setHasUserDismissedModal(true);
+    localStorage.setItem('portfolio_modal_dismissed', 'true');
+  };
+
+  // Handle skip to Excel upload
+  const handleSkipToExcel = () => {
+    setShowDataSourceModal(false);
+    setActiveTab('sources');
+  };
 
   // Use live holdings if available, otherwise fall back to sample data
   const enrichedHoldings = useMemo(() => {
@@ -176,12 +193,14 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mandatory Kite Login Modal */}
-      {showMandatoryLogin && (
+      {/* Optional Data Source Modal */}
+      {showDataSourceModal && (
         <KiteLoginModal
           loginUrl={loginUrl}
           loginUrlError={loginUrlError}
           isLoading={isKiteLoading}
+          onDismiss={handleDismissModal}
+          onSkipToExcel={handleSkipToExcel}
         />
       )}
 
