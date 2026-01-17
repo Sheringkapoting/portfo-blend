@@ -1,9 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders } from '../_shared/cors.ts'
+import { authenticateUser } from '../_shared/auth.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -11,12 +8,29 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Authenticate the user
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    )
+
+    const { user, error: authError } = await authenticateUser(supabase)
+    if (authError) {
+      return new Response(
+        JSON.stringify({ error: authError.message }),
+        { status: authError.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const { portfolioData } = await req.json()
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')
     
     if (!LOVABLE_API_KEY) {
       throw new Error('LOVABLE_API_KEY is not configured')
     }
+
+    console.log(`Portfolio analysis requested by user: ${user.id}`)
 
     const systemPrompt = `You are an expert portfolio analyst. Analyze the provided portfolio data and generate structured insights.
 
