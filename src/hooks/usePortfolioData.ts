@@ -12,12 +12,27 @@ interface SyncStatus {
   created_at: string;
 }
 
+interface IndMoneyProgress {
+  step: 'idle' | 'uploading' | 'processing' | 'syncing' | 'complete' | 'error';
+  message: string;
+  progress: number;
+  error?: string | null;
+  warnings?: string[];
+}
+
+const MAX_EXCEL_FILE_SIZE = 10 * 1024 * 1024;
+
 export function usePortfolioData() {
   const [holdings, setHoldings] = useState<EnrichedHolding[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus[]>([]);
+  const [indmoneyProgress, setIndmoneyProgress] = useState<IndMoneyProgress>({
+    step: 'idle',
+    message: '',
+    progress: 0,
+  });
 
   const fetchHoldings = useCallback(async () => {
     try {
@@ -135,7 +150,26 @@ export function usePortfolioData() {
   }, [fetchHoldings, fetchSyncStatus]);
 
   const uploadINDMoneyExcel = useCallback(async (file: File) => {
+    if (file.size > MAX_EXCEL_FILE_SIZE) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      toast.error(`File is too large (${sizeMb} MB). Maximum allowed size is 10 MB.`);
+      setIndmoneyProgress({
+        step: 'error',
+        message: 'File size exceeds 10 MB limit',
+        progress: 100,
+        error: 'File too large',
+      });
+      return;
+    }
+
     setIsSyncing(true);
+    setIndmoneyProgress({
+      step: 'uploading',
+      message: `Uploading ${file.name}`,
+      progress: 10,
+      error: null,
+      warnings: [],
+    });
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -145,17 +179,68 @@ export function usePortfolioData() {
       });
       
       if (error) throw error;
-      
+
+      setIndmoneyProgress(prev => ({
+        ...prev,
+        step: 'processing',
+        message: 'Processing Excel and syncing holdings',
+        progress: 60,
+      }));
+
       if (data.success) {
-        toast.success(data.message);
+        const syncStatusValue = data.sync_status as string | undefined;
+        const integrityWarnings: string[] = Array.isArray(data?.data_integrity?.warnings)
+          ? data.data_integrity.warnings
+          : [];
+        const reconciliationMessages: string[] = Array.isArray(data?.reconciliation?.messages)
+          ? data.reconciliation.messages
+          : [];
+        const warnings = [...integrityWarnings, ...reconciliationMessages];
+
+        if (syncStatusValue === 'partial') {
+          toast.warning('Imported with warnings', {
+            description: warnings[0] || data.message,
+            duration: 6000,
+          });
+        } else {
+          toast.success(data.message);
+        }
+
+        setIndmoneyProgress({
+          step: syncStatusValue === 'partial' ? 'complete' : 'complete',
+          message:
+            syncStatusValue === 'partial'
+              ? 'Import completed with warnings. Review details in Data Sources.'
+              : 'Import completed successfully.',
+          progress: 100,
+          error: null,
+          warnings,
+        });
+
         await fetchHoldings();
         await fetchSyncStatus();
       } else {
-        toast.error(data.error || 'Failed to parse INDMoney file');
+        const errorMessage = data.error || 'Failed to parse INDMoney file';
+        toast.error(errorMessage);
+        setIndmoneyProgress({
+          step: 'error',
+          message: errorMessage,
+          progress: 100,
+          error: errorMessage,
+          warnings: [],
+        });
       }
     } catch (error: any) {
       console.error('INDMoney upload error:', error);
-      toast.error(error.message || 'Failed to upload INDMoney file');
+      const message = error.message || 'Failed to upload INDMoney file';
+      toast.error(message);
+      setIndmoneyProgress({
+        step: 'error',
+        message,
+        progress: 100,
+        error: message,
+        warnings: [],
+      });
     } finally {
       setIsSyncing(false);
     }
@@ -172,6 +257,7 @@ export function usePortfolioData() {
     isSyncing,
     lastSync,
     syncStatus,
+    indmoneyProgress,
     syncZerodha,
     syncZerodhaWithRetry,
     uploadINDMoneyExcel,

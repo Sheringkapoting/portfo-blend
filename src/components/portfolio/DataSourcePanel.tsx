@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { KiteConnectCard } from './KiteConnectCard';
 import { BrokerPlaceholderCard, AVAILABLE_BROKERS } from './BrokerPlaceholderCard';
 import { KiteLoginModal } from './KiteLoginModal';
 import { useKiteSession } from '@/hooks/useKiteSession';
+import { Progress } from '@/components/ui/progress';
 
 interface SyncStatus {
   source: string;
@@ -14,6 +15,14 @@ interface SyncStatus {
   holdings_count: number | null;
   error_message: string | null;
   created_at: string;
+}
+
+interface IndMoneyProgress {
+  step: 'idle' | 'uploading' | 'processing' | 'syncing' | 'complete' | 'error';
+  message: string;
+  progress: number;
+  error?: string | null;
+  warnings?: string[];
 }
 
 interface SyncProgress {
@@ -29,6 +38,7 @@ interface DataSourcePanelProps {
   lastSync: Date | null;
   showMandatoryKiteLogin?: boolean;
   syncProgress?: SyncProgress;
+  indmoneyProgress?: IndMoneyProgress;
 }
 
 export function DataSourcePanel({
@@ -39,6 +49,7 @@ export function DataSourcePanel({
   lastSync,
   showMandatoryKiteLogin = false,
   syncProgress,
+  indmoneyProgress,
 }: DataSourcePanelProps) {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -148,11 +159,39 @@ export function DataSourcePanel({
                         <CheckCircle2 className="h-4 w-4 text-profit" />
                         {indmoneyStatus.holdings_count} holdings imported
                       </span>
+                    ) : indmoneyStatus.status === 'partial' ? (
+                      <span className="flex items-center gap-2 text-amber-600">
+                        <AlertTriangle className="h-4 w-4" />
+                        {indmoneyStatus.error_message || 'Imported with warnings. Some entries may be missing.'}
+                      </span>
                     ) : (
                       <span className="flex items-center gap-2 text-loss">
                         <XCircle className="h-4 w-4" />
                         {indmoneyStatus.error_message}
                       </span>
+                    )}
+                  </div>
+                )}
+                {indmoneyProgress && indmoneyProgress.step !== 'idle' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{indmoneyProgress.message}</span>
+                      <span className="font-mono-numbers">
+                        {Math.round(indmoneyProgress.progress)}%
+                      </span>
+                    </div>
+                    <Progress value={indmoneyProgress.progress} />
+                    {indmoneyProgress.warnings && indmoneyProgress.warnings.length > 0 && (
+                      <ul className="mt-1 text-xs text-amber-600 space-y-1 text-left">
+                        {indmoneyProgress.warnings.slice(0, 2).map((warning, index) => (
+                          <li key={index}>{warning}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {indmoneyProgress.step === 'error' && indmoneyProgress.error && (
+                      <p className="mt-1 text-xs text-destructive text-left">
+                        {indmoneyProgress.error}
+                      </p>
                     )}
                   </div>
                 )}

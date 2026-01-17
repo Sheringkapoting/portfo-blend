@@ -47,6 +47,19 @@ interface ParseResult {
   }
 }
 
+interface ReconciliationResult {
+  hasAnalyticsSheet: boolean
+  isConsistent: boolean
+  tolerancePercent: number
+  holdingsTotalInvested: number
+  holdingsTotalCurrent: number
+  analyticsTotalInvested?: number
+  analyticsTotalCurrent?: number
+  diffInvested?: number
+  diffCurrent?: number
+  messages: string[]
+}
+
 // Column mapping for INDMoney Holdings Report
 interface ColumnMap {
   firstName: number
@@ -199,7 +212,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Verify data integrity before proceeding
     const verification = verifyDataIntegrity(parseResult.holdings)
     if (!hasXirrColumn) {
       verification.warnings.push('XIRR (%) column is missing. XIRR values were not imported from this file.')
@@ -213,13 +225,16 @@ Deno.serve(async (req) => {
       console.warn('Data integrity warnings:', verification.warnings)
     }
 
-    // Delete existing INDMoney holdings for this user and insert new ones
+    const reconciliation = reconcileWithAnalyticsSheet(workbook, parseResult.holdings)
+    const syncStatusValue = reconciliation.hasAnalyticsSheet && !reconciliation.isConsistent
+      ? 'partial'
+      : 'success'
+
     let deleteQuery = supabase
       .from('holdings')
       .delete()
       .eq('source', 'INDMoney')
     
-    // If user is authenticated, only delete their holdings
     if (authResult.userId) {
       deleteQuery = deleteQuery.eq('user_id', authResult.userId)
     }
@@ -256,15 +271,16 @@ Deno.serve(async (req) => {
 
     const processingTime = Date.now() - startTime
 
-    // Log the sync with detailed info
     const syncLogInsert = {
       source: 'INDMoney',
-      status: 'success',
+      status: syncStatusValue,
       holdings_count: insertedCount,
       user_id: authResult.userId || null,
-      error_message: parseResult.skipped.length > 0 
-        ? `${parseResult.skipped.length} entries skipped`
-        : null,
+      error_message: reconciliation.hasAnalyticsSheet && !reconciliation.isConsistent
+        ? reconciliation.messages.join('; ')
+        : parseResult.skipped.length > 0
+          ? `${parseResult.skipped.length} entries skipped`
+          : null,
     }
     
     console.log('Inserting sync log:', syncLogInsert)
@@ -279,6 +295,8 @@ Deno.serve(async (req) => {
       processing_time_ms: processingTime,
       data_integrity: verification,
       user_id: authResult.userId,
+      sync_status: syncStatusValue,
+      reconciliation,
     }
 
     console.log('Sync completed successfully:', JSON.stringify(response, null, 2))

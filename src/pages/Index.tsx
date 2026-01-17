@@ -39,6 +39,7 @@ const Index = () => {
     isSyncing,
     lastSync,
     syncStatus,
+    indmoneyProgress,
     syncZerodha,
     uploadINDMoneyExcel,
     refetch,
@@ -337,6 +338,7 @@ const Index = () => {
               syncStatus={syncStatus}
               lastSync={lastSync}
               syncProgress={oauthProgress}
+              indmoneyProgress={indmoneyProgress}
             />
           </TabsContent>
         </Tabs>
