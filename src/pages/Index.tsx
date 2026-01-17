@@ -66,6 +66,9 @@ const Index = () => {
 
   // Active tab state - controlled to allow programmatic switching
   const [activeTab, setActiveTab] = useState('holdings');
+  
+  // Allocation view mode toggle
+  const [allocationViewMode, setAllocationViewMode] = useState<'percent' | 'amount'>('percent');
 
   // Check if we should show mandatory Kite login
   const [showMandatoryLogin, setShowMandatoryLogin] = useState(false);
@@ -263,49 +266,69 @@ const Index = () => {
             )}
           </TabsContent>
 
-          <TabsContent value="allocation" className="mt-6 space-y-8">
-            {/* Percentage-based allocation charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <AllocationChart
-                data={sectorAllocation}
-                title="Sector Allocation"
-                labelKey="sector"
-                delay={0.1}
-              />
-              <AllocationChart
-                data={typeAllocation}
-                title="Asset Type Allocation"
-                labelKey="type"
-                delay={0.2}
-              />
-              <AllocationChart
-                data={sourceAllocation}
-                title="Source Allocation"
-                labelKey="source"
-                delay={0.3}
-              />
+          <TabsContent value="allocation" className="mt-6 space-y-6">
+            {/* Toggle for view mode */}
+            <div className="flex items-center justify-end">
+              <ToggleGroup
+                type="single"
+                value={allocationViewMode}
+                onValueChange={(value) => value && setAllocationViewMode(value as 'percent' | 'amount')}
+                className="bg-muted/50 border border-border rounded-lg p-1"
+              >
+                <ToggleGroupItem value="percent" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
+                  Percentage (%)
+                </ToggleGroupItem>
+                <ToggleGroupItem value="amount" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
+                  Amount (₹)
+                </ToggleGroupItem>
+              </ToggleGroup>
             </div>
 
-            {/* Amount-based allocation charts */}
+            {/* Allocation charts - shows either percentage or amount based on toggle */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <AmountAllocationChart
-                data={sectorAllocation}
-                title="Sector Value (₹)"
-                labelKey="sector"
-                delay={0.4}
-              />
-              <AmountAllocationChart
-                data={typeAllocation}
-                title="Asset Type Value (₹)"
-                labelKey="type"
-                delay={0.5}
-              />
-              <AmountAllocationChart
-                data={sourceAllocation}
-                title="Source Value (₹)"
-                labelKey="source"
-                delay={0.6}
-              />
+              {allocationViewMode === 'percent' ? (
+                <>
+                  <AllocationChart
+                    data={sectorAllocation}
+                    title="Sector Allocation"
+                    labelKey="sector"
+                    delay={0.1}
+                  />
+                  <AllocationChart
+                    data={typeAllocation}
+                    title="Asset Type Allocation"
+                    labelKey="type"
+                    delay={0.2}
+                  />
+                  <AllocationChart
+                    data={sourceAllocation}
+                    title="Source Allocation"
+                    labelKey="source"
+                    delay={0.3}
+                  />
+                </>
+              ) : (
+                <>
+                  <AmountAllocationChart
+                    data={sectorAllocation}
+                    title="Sector Value (₹)"
+                    labelKey="sector"
+                    delay={0.1}
+                  />
+                  <AmountAllocationChart
+                    data={typeAllocation}
+                    title="Asset Type Value (₹)"
+                    labelKey="type"
+                    delay={0.2}
+                  />
+                  <AmountAllocationChart
+                    data={sourceAllocation}
+                    title="Source Value (₹)"
+                    labelKey="source"
+                    delay={0.3}
+                  />
+                </>
+              )}
             </div>
           </TabsContent>
 
