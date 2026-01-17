@@ -5,6 +5,7 @@ import { StatCard } from '@/components/portfolio/StatCard';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
 import { TabbedHoldings } from '@/components/portfolio/TabbedHoldings';
 import { AllocationChart } from '@/components/portfolio/AllocationChart';
+import { SourceBadge } from '@/components/portfolio/SourceBadge';
 import { DataSourcePanel } from '@/components/portfolio/DataSourcePanel';
 import { PortfolioAnalytics } from '@/components/portfolio/PortfolioAnalytics';
 import { CacheStatusBadge } from '@/components/portfolio/CacheStatusBadge';
@@ -21,8 +22,11 @@ import {
   calculatePortfolioSummary,
   calculateSectorAllocation,
   calculateTypeAllocation,
-  calculateSourceAllocation
+  calculateSourceAllocation,
+  formatCurrency,
+  formatPercent
 } from '@/lib/portfolioUtils';
+import type { Source } from '@/types/portfolio';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -133,6 +137,18 @@ const Index = () => {
     [enrichedHoldings]
   );
 
+  const sourceSummary = useMemo(() => {
+    const countMap = new Map<string, number>();
+    enrichedHoldings.forEach(h => {
+      const key = h.source || 'Unknown';
+      countMap.set(key, (countMap.get(key) || 0) + 1);
+    });
+    return sourceAllocation.map(s => ({
+      ...s,
+      count: countMap.get(s.source) || 0
+    }));
+  }, [enrichedHoldings, sourceAllocation]);
+
   const handleRefresh = async () => {
     await refetch();
     await refreshCache();
@@ -187,7 +203,7 @@ const Index = () => {
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
           <StatCard
             title="Total Investment"
             value={summary.totalInvestment}
@@ -212,6 +228,25 @@ const Index = () => {
             delay={0.2}
           />
         </div>
+
+        {sourceSummary.length > 0 && (
+          <div className="mb-8 rounded-lg border border-border bg-card/50 px-4 py-3 text-sm flex flex-wrap gap-4 items-center">
+            <span className="font-medium text-muted-foreground">
+              By source:
+            </span>
+            {sourceSummary.map((s) => (
+              <div key={s.source} className="flex items-baseline gap-2">
+                <SourceBadge source={s.source as Source} />
+                <span className="font-mono-numbers text-foreground">
+                  {formatCurrency(s.value, true)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  ({s.count} holdings, {formatPercent(s.percent)})
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
