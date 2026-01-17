@@ -24,14 +24,14 @@ interface CaptureModalProps {
 }
 
 const ASSET_TYPES = [
-  { id: 'Stock', label: 'Equities', icon: '📈' },
+  { id: 'Equity', label: 'Equities', icon: '📈' },
   { id: 'Mutual Fund', label: 'Mutual Funds', icon: '📊' },
+  { id: 'ETF', label: 'ETFs', icon: '📉' },
   { id: 'US Stock', label: 'US Stocks', icon: '🇺🇸' },
-  { id: 'EPF', label: 'EPF', icon: '🏦' },
-  { id: 'PPF', label: 'PPF', icon: '💰' },
-  { id: 'NPS', label: 'NPS', icon: '📋' },
+  { id: 'SGB', label: 'Sovereign Gold Bonds', icon: '🥇' },
+  { id: 'Debt MF', label: 'Debt MFs', icon: '📋' },
+  { id: 'Commodity MF', label: 'Commodity MFs', icon: '🏦' },
   { id: 'Bond', label: 'Bonds', icon: '📜' },
-  { id: 'SGB', label: 'Gold Bonds', icon: '🥇' },
 ];
 
 export function CaptureModal({
