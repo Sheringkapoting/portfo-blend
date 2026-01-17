@@ -1,28 +1,36 @@
 import { motion } from 'framer-motion';
-import { RefreshCcw, Clock, Wifi, Database } from 'lucide-react';
+import { RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { UserMenu } from './UserMenu';
+import { SyncHealthIndicator } from './SyncHealthIndicator';
+
+interface SourceStatus {
+  source: string;
+  lastSuccessAt: Date | null;
+  holdingsCount: number | null;
+  status: 'success' | 'failed' | 'never';
+}
 
 interface DashboardHeaderProps {
-  lastUpdated?: Date;
-  isLive?: boolean;
   onRefresh?: () => void;
   isRefreshing?: boolean;
+  sourceStatuses?: SourceStatus[];
+  getTimeAgo?: (date: Date | null) => string;
 }
 
 export function DashboardHeader({ 
-  lastUpdated, 
-  isLive = false, 
   onRefresh,
-  isRefreshing = false 
+  isRefreshing = false,
+  sourceStatuses = [],
+  getTimeAgo = () => 'Never',
 }: DashboardHeaderProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8"
+      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full"
     >
       <div>
         <h1 className="text-3xl font-bold text-foreground tracking-tight">
@@ -33,40 +41,12 @@ export function DashboardHeader({
         </p>
       </div>
       
-      <div className="flex items-center gap-4">
-        {/* Connection Status */}
-        <div className={cn(
-          "flex items-center gap-2 px-3 py-1.5 rounded-full text-sm",
-          isLive 
-            ? "bg-profit/10 text-profit" 
-            : "bg-muted text-muted-foreground"
-        )}>
-          {isLive ? (
-            <>
-              <Wifi className="h-4 w-4" />
-              <span className="hidden sm:inline">Live</span>
-            </>
-          ) : (
-            <>
-              <Database className="h-4 w-4" />
-              <span className="hidden sm:inline">Cached</span>
-            </>
-          )}
-        </div>
-        
-        {/* Last Updated */}
-        {lastUpdated && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Clock className="h-4 w-4" />
-            <span className="hidden sm:inline">Updated:</span>
-            <span className="font-mono-numbers">
-              {lastUpdated.toLocaleTimeString('en-IN', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })}
-            </span>
-          </div>
-        )}
+      <div className="flex items-center gap-3">
+        {/* Sync Health Indicators */}
+        <SyncHealthIndicator 
+          sourceStatuses={sourceStatuses} 
+          getTimeAgo={getTimeAgo} 
+        />
         
         {/* Refresh Button */}
         <Button

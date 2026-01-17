@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, LayoutGrid, MessageSquare } from 'lucide-react';
 import { DashboardHeader } from '@/components/portfolio/DashboardHeader';
 import { StatCard } from '@/components/portfolio/StatCard';
@@ -16,6 +16,8 @@ import { usePortfolioData } from '@/hooks/usePortfolioData';
 import { usePortfolioCache } from '@/hooks/usePortfolioCache';
 import { useKiteSession } from '@/hooks/useKiteSession';
 import { useKiteOAuthHandler } from '@/hooks/useKiteOAuthHandler';
+import { useSyncHealth } from '@/hooks/useSyncHealth';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 import { sampleHoldings } from '@/data/sampleHoldings';
 import { 
   enrichHolding, 
@@ -28,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Button } from '@/components/ui/button';
-
+import { toast } from 'sonner';
 const Index = () => {
   const {
     holdings: liveHoldings,
@@ -57,6 +59,13 @@ const Index = () => {
     isLoading: isKiteLoading,
     refetch: refetchKiteSession,
   } = useKiteSession();
+
+  // Sync health for each source
+  const {
+    sourceStatuses,
+    getTimeAgo,
+    refetch: refetchSyncHealth,
+  } = useSyncHealth();
 
   // View mode for holdings: 'tabbed' (by asset class tabs) or 'flat' (traditional table)
   const [holdingsView, setHoldingsView] = useState<'tabbed' | 'flat'>('tabbed');
@@ -137,10 +146,20 @@ const Index = () => {
     [enrichedHoldings]
   );
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
+    toast.info('Refreshing portfolio data...');
     await refetch();
     await refreshCache();
-  };
+    await refetchSyncHealth();
+    toast.success('Portfolio data refreshed');
+  }, [refetch, refreshCache, refetchSyncHealth]);
+
+  // Auto-refresh when user returns to app after being away
+  useAutoRefresh({
+    onRefresh: handleRefresh,
+    minInactiveTime: 60000, // Refresh if away for 1+ minute
+    enabled: true,
+  });
 
   const isProfitable = summary.totalPnl >= 0;
 
@@ -172,22 +191,13 @@ const Index = () => {
       )}
 
       <div className="container mx-auto px-4 py-8 max-w-7xl">
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6">
           <DashboardHeader 
-            lastUpdated={lastSync || new Date()}
-            isLive={isLive}
             onRefresh={handleRefresh}
             isRefreshing={isSyncing}
+            sourceStatuses={sourceStatuses}
+            getTimeAgo={getTimeAgo}
           />
-          {/* Cache status indicator */}
-          {isUsingCache && (
-            <CacheStatusBadge
-              cacheTimestamp={cacheTimestamp}
-              getCacheAge={getCacheAge}
-              isLoadingCache={isLoadingCache}
-              isUsingCache={isUsingCache}
-            />
-          )}
         </div>
 
         {/* Summary Stats */}
