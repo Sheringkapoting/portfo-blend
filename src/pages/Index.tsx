@@ -5,6 +5,7 @@ import { StatCard } from '@/components/portfolio/StatCard';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
 import { TabbedHoldings } from '@/components/portfolio/TabbedHoldings';
 import { AllocationChart } from '@/components/portfolio/AllocationChart';
+import { AmountAllocationChart } from '@/components/portfolio/AmountAllocationChart';
 import { DataSourcePanel } from '@/components/portfolio/DataSourcePanel';
 import { PortfolioAnalytics } from '@/components/portfolio/PortfolioAnalytics';
 import { CacheStatusBadge } from '@/components/portfolio/CacheStatusBadge';
@@ -262,7 +263,8 @@ const Index = () => {
             )}
           </TabsContent>
 
-          <TabsContent value="allocation" className="mt-6">
+          <TabsContent value="allocation" className="mt-6 space-y-8">
+            {/* Percentage-based allocation charts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <AllocationChart
                 data={sectorAllocation}
@@ -281,6 +283,28 @@ const Index = () => {
                 title="Source Allocation"
                 labelKey="source"
                 delay={0.3}
+              />
+            </div>
+
+            {/* Amount-based allocation charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <AmountAllocationChart
+                data={sectorAllocation}
+                title="Sector Value (₹)"
+                labelKey="sector"
+                delay={0.4}
+              />
+              <AmountAllocationChart
+                data={typeAllocation}
+                title="Asset Type Value (₹)"
+                labelKey="type"
+                delay={0.5}
+              />
+              <AmountAllocationChart
+                data={sourceAllocation}
+                title="Source Value (₹)"
+                labelKey="source"
+                delay={0.6}
               />
             </div>
           </TabsContent>

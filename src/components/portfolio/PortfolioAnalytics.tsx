@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { formatCurrency, formatPercent } from '@/lib/portfolioUtils';
 import { toast } from 'sonner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { SourceBreakdownChart } from './SourceBreakdownChart';
+// SourceBreakdownChart import removed - section removed per user request
 import { CaptureModal } from './CaptureModal';
 import { DataFreshnessIndicator, MultiSourceFreshness } from './DataFreshnessIndicator';
 
@@ -316,10 +316,7 @@ export function PortfolioAnalytics() {
         </div>
       )}
 
-      {/* Source Breakdown Charts */}
-      {sourceDetails.length > 0 && (
-        <SourceBreakdownChart sourceDetails={sourceDetails} />
-      )}
+      {/* Source Breakdown Charts section removed per user request */}
 
       {/* Main Chart */}
       <Card className="border-border bg-card/50 backdrop-blur-sm">
