@@ -5,9 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { KiteConnectCard } from './KiteConnectCard';
 import { BrokerPlaceholderCard, AVAILABLE_BROKERS } from './BrokerPlaceholderCard';
-import { KiteLoginModal } from './KiteLoginModal';
 import { ExcelUploadProgress } from './ExcelUploadProgress';
-import { useKiteSession } from '@/hooks/useKiteSession';
 import { UploadProgress } from '@/hooks/useExcelUploadProgress';
 
 interface SyncStatus {
@@ -29,7 +27,6 @@ interface DataSourcePanelProps {
   isSyncing: boolean;
   syncStatus: SyncStatus[];
   lastSync: Date | null;
-  showMandatoryKiteLogin?: boolean;
   syncProgress?: SyncProgress;
   uploadProgress?: UploadProgress;
   onResetUploadProgress?: () => void;
@@ -41,7 +38,6 @@ export function DataSourcePanel({
   isSyncing,
   syncStatus,
   lastSync,
-  showMandatoryKiteLogin = false,
   syncProgress,
   uploadProgress,
   onResetUploadProgress,
@@ -49,10 +45,6 @@ export function DataSourcePanel({
   const [dragActive, setDragActive] = useState(false);
   const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { isSessionValid, loginUrl, loginUrlError, isLoading: isKiteLoading } = useKiteSession();
-
-  // Check if we need to show the mandatory Kite login
-  const shouldShowKiteModal = showMandatoryKiteLogin && !isSessionValid && !isKiteLoading;
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -107,22 +99,12 @@ export function DataSourcePanel({
     !['idle', 'complete', 'partial', 'error'].includes(uploadProgress.step);
 
   return (
-    <>
-      {/* Mandatory Kite Login Modal */}
-      {shouldShowKiteModal && (
-        <KiteLoginModal
-          loginUrl={loginUrl}
-          loginUrlError={loginUrlError}
-          isLoading={isKiteLoading}
-        />
-      )}
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="space-y-6"
-      >
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="space-y-6"
+    >
         {/* Section Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -255,9 +237,9 @@ export function DataSourcePanel({
           </div>
         </div>
       </motion.div>
-    </>
   );
 }
+
 
 interface StatusBadgeProps {
   status?: SyncStatus;
