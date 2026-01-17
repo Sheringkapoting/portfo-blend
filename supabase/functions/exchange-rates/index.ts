@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
+import { corsHeaders } from '../_shared/auth.ts'
 
 // Free exchange rate API (no API key required, updated daily)
 const EXCHANGE_RATE_API = 'https://api.exchangerate-api.com/v4/latest/USD'

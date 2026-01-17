@@ -5,7 +5,6 @@ import { StatCard } from '@/components/portfolio/StatCard';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
 import { TabbedHoldings } from '@/components/portfolio/TabbedHoldings';
 import { AllocationChart } from '@/components/portfolio/AllocationChart';
-import { SourceBadge } from '@/components/portfolio/SourceBadge';
 import { DataSourcePanel } from '@/components/portfolio/DataSourcePanel';
 import { PortfolioAnalytics } from '@/components/portfolio/PortfolioAnalytics';
 import { CacheStatusBadge } from '@/components/portfolio/CacheStatusBadge';
@@ -22,11 +21,8 @@ import {
   calculatePortfolioSummary,
   calculateSectorAllocation,
   calculateTypeAllocation,
-  calculateSourceAllocation,
-  formatCurrency,
-  formatPercent
+  calculateSourceAllocation
 } from '@/lib/portfolioUtils';
-import type { Source } from '@/types/portfolio';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -39,8 +35,6 @@ const Index = () => {
     isSyncing,
     lastSync,
     syncStatus,
-    uploadProgress,
-    resetUploadProgress,
     syncZerodha,
     uploadINDMoneyExcel,
     refetch,
@@ -72,13 +66,9 @@ const Index = () => {
   // Active tab state - controlled to allow programmatic switching
   const [activeTab, setActiveTab] = useState('holdings');
 
-  // Check if we should show optional data source modal (not mandatory)
-  const [showDataSourceModal, setShowDataSourceModal] = useState(false);
-  const [hasCheckedInitialState, setHasCheckedInitialState] = useState(false);
-  const [hasUserDismissedModal, setHasUserDismissedModal] = useState(() => {
-    // Check if user previously dismissed the modal
-    return localStorage.getItem('portfolio_modal_dismissed') === 'true';
-  });
+  // Check if we should show mandatory Kite login
+  const [showMandatoryLogin, setShowMandatoryLogin] = useState(false);
+  const [hasCheckedKiteOnce, setHasCheckedKiteOnce] = useState(false);
 
   // Handle OAuth redirect with new dedicated hook
   const { progress: oauthProgress } = useKiteOAuthHandler({
@@ -91,38 +81,25 @@ const Index = () => {
 
   useEffect(() => {
     // Only check once after initial load
-    if (!isKiteLoading && !isLoading && !hasCheckedInitialState) {
-      setHasCheckedInitialState(true);
-      // Show data source modal if no holdings and user hasn't dismissed it before
-      if (liveHoldings.length === 0 && !hasUserDismissedModal) {
+    if (!isKiteLoading && !isLoading && !hasCheckedKiteOnce) {
+      setHasCheckedKiteOnce(true);
+      // Show mandatory login if no valid session and no holdings
+      if (!isSessionValid && liveHoldings.length === 0) {
         // Check if user just came back from Kite OAuth
         const params = new URLSearchParams(window.location.search);
         if (!params.get('kite_connected')) {
-          setShowDataSourceModal(true);
+          setShowMandatoryLogin(true);
         }
       }
     }
-  }, [isKiteLoading, isLoading, liveHoldings.length, hasCheckedInitialState, hasUserDismissedModal]);
+  }, [isKiteLoading, isLoading, isSessionValid, liveHoldings.length, hasCheckedKiteOnce]);
 
-  // Hide modal when session becomes valid or holdings are loaded
+  // Hide modal when session becomes valid
   useEffect(() => {
-    if (isSessionValid || liveHoldings.length > 0) {
-      setShowDataSourceModal(false);
+    if (isSessionValid) {
+      setShowMandatoryLogin(false);
     }
-  }, [isSessionValid, liveHoldings.length]);
-
-  // Handle modal dismiss
-  const handleDismissModal = () => {
-    setShowDataSourceModal(false);
-    setHasUserDismissedModal(true);
-    localStorage.setItem('portfolio_modal_dismissed', 'true');
-  };
-
-  // Handle skip to Excel upload
-  const handleSkipToExcel = () => {
-    setShowDataSourceModal(false);
-    setActiveTab('sources');
-  };
+  }, [isSessionValid]);
 
   // Use live holdings if available, otherwise fall back to sample data
   const enrichedHoldings = useMemo(() => {
@@ -156,18 +133,6 @@ const Index = () => {
     [enrichedHoldings]
   );
 
-  const sourceSummary = useMemo(() => {
-    const countMap = new Map<string, number>();
-    enrichedHoldings.forEach(h => {
-      const key = h.source || 'Unknown';
-      countMap.set(key, (countMap.get(key) || 0) + 1);
-    });
-    return sourceAllocation.map(s => ({
-      ...s,
-      count: countMap.get(s.source) || 0
-    }));
-  }, [enrichedHoldings, sourceAllocation]);
-
   const handleRefresh = async () => {
     await refetch();
     await refreshCache();
@@ -193,14 +158,12 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Optional Data Source Modal */}
-      {showDataSourceModal && (
+      {/* Mandatory Kite Login Modal */}
+      {showMandatoryLogin && (
         <KiteLoginModal
           loginUrl={loginUrl}
           loginUrlError={loginUrlError}
           isLoading={isKiteLoading}
-          onDismiss={handleDismissModal}
-          onSkipToExcel={handleSkipToExcel}
         />
       )}
 
@@ -224,7 +187,7 @@ const Index = () => {
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <StatCard
             title="Total Investment"
             value={summary.totalInvestment}
@@ -249,25 +212,6 @@ const Index = () => {
             delay={0.2}
           />
         </div>
-
-        {sourceSummary.length > 0 && (
-          <div className="mb-8 rounded-lg border border-border bg-card/50 px-4 py-3 text-sm flex flex-wrap gap-4 items-center">
-            <span className="font-medium text-muted-foreground">
-              By source:
-            </span>
-            {sourceSummary.map((s) => (
-              <div key={s.source} className="flex items-baseline gap-2">
-                <SourceBadge source={s.source as Source} />
-                <span className="font-mono-numbers text-foreground">
-                  {formatCurrency(s.value, true)}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  ({s.count} holdings, {formatPercent(s.percent)})
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -358,8 +302,6 @@ const Index = () => {
               syncStatus={syncStatus}
               lastSync={lastSync}
               syncProgress={oauthProgress}
-              uploadProgress={uploadProgress}
-              onResetUploadProgress={resetUploadProgress}
             />
           </TabsContent>
         </Tabs>

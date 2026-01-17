@@ -171,19 +171,22 @@ Deno.serve(async (req) => {
     const expiresAt = new Date()
     expiresAt.setHours(expiresAt.getHours() + 8) // Conservative 8 hour expiry
 
-    // Enforce user_id requirement for secure session storage
-    if (!userId) {
-      console.error('OAuth callback: No user_id in state - rejecting session')
-      throw new Error('Authentication state invalid. Please try logging in again.')
+    // Delete old sessions for this user and insert new one
+    if (userId) {
+      await supabase.from('kite_sessions').delete().eq('user_id', userId)
+    } else {
+      // If no user_id, delete sessions without user_id (cleanup orphaned sessions)
+      await supabase.from('kite_sessions').delete().is('user_id', null)
     }
     
-    // Delete old sessions for this user and insert new one
-    await supabase.from('kite_sessions').delete().eq('user_id', userId)
-    
-    const sessionData = {
+    const sessionData: { access_token: string; expires_at: string; user_id?: string } = {
       access_token: accessToken,
       expires_at: expiresAt.toISOString(),
-      user_id: userId, // Always required now
+    }
+    
+    // Always set user_id if available from OAuth state
+    if (userId) {
+      sessionData.user_id = userId
     }
     
     const { error: insertError } = await supabase.from('kite_sessions').insert(sessionData)
@@ -193,13 +196,13 @@ Deno.serve(async (req) => {
       throw new Error('Failed to store session')
     }
     
-    console.log('Kite session stored successfully', { userId })
+    console.log('Kite session stored successfully', { userId: userId || 'none' })
 
     // Log the successful connection
     await supabase.from('sync_logs').insert({
       source: 'Zerodha',
       status: 'connected',
-      user_id: userId,
+      user_id: userId || null,
       holdings_count: 0,
     })
 

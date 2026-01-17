@@ -47,19 +47,6 @@ interface ParseResult {
   }
 }
 
-interface ReconciliationResult {
-  hasAnalyticsSheet: boolean
-  isConsistent: boolean
-  tolerancePercent: number
-  holdingsTotalInvested: number
-  holdingsTotalCurrent: number
-  analyticsTotalInvested?: number
-  analyticsTotalCurrent?: number
-  diffInvested?: number
-  diffCurrent?: number
-  messages: string[]
-}
-
 // Column mapping for INDMoney Holdings Report
 interface ColumnMap {
   firstName: number
@@ -212,6 +199,7 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Verify data integrity before proceeding
     const verification = verifyDataIntegrity(parseResult.holdings)
     if (!hasXirrColumn) {
       verification.warnings.push('XIRR (%) column is missing. XIRR values were not imported from this file.')
@@ -225,16 +213,13 @@ Deno.serve(async (req) => {
       console.warn('Data integrity warnings:', verification.warnings)
     }
 
-    const reconciliation = reconcileWithAnalyticsSheet(workbook, parseResult.holdings)
-    const syncStatusValue = reconciliation.hasAnalyticsSheet && !reconciliation.isConsistent
-      ? 'partial'
-      : 'success'
-
+    // Delete existing INDMoney holdings for this user and insert new ones
     let deleteQuery = supabase
       .from('holdings')
       .delete()
       .eq('source', 'INDMoney')
     
+    // If user is authenticated, only delete their holdings
     if (authResult.userId) {
       deleteQuery = deleteQuery.eq('user_id', authResult.userId)
     }
@@ -271,16 +256,15 @@ Deno.serve(async (req) => {
 
     const processingTime = Date.now() - startTime
 
+    // Log the sync with detailed info
     const syncLogInsert = {
       source: 'INDMoney',
-      status: syncStatusValue,
+      status: 'success',
       holdings_count: insertedCount,
       user_id: authResult.userId || null,
-      error_message: reconciliation.hasAnalyticsSheet && !reconciliation.isConsistent
-        ? reconciliation.messages.join('; ')
-        : parseResult.skipped.length > 0
-          ? `${parseResult.skipped.length} entries skipped`
-          : null,
+      error_message: parseResult.skipped.length > 0 
+        ? `${parseResult.skipped.length} entries skipped`
+        : null,
     }
     
     console.log('Inserting sync log:', syncLogInsert)
@@ -295,8 +279,6 @@ Deno.serve(async (req) => {
       processing_time_ms: processingTime,
       data_integrity: verification,
       user_id: authResult.userId,
-      sync_status: syncStatusValue,
-      reconciliation,
     }
 
     console.log('Sync completed successfully:', JSON.stringify(response, null, 2))
@@ -753,101 +735,4 @@ function verifyDataIntegrity(holdings: ParsedHolding[]): ValidationResult {
     errors,
     warnings,
   }
-}
-
-/**
- * Reconcile parsed holdings with Analytics sheet (if present)
- * Compares totals between Holdings sheet data and Analytics summary
- */
-function reconcileWithAnalyticsSheet(workbook: XLSX.WorkBook, holdings: ParsedHolding[]): ReconciliationResult {
-  const result: ReconciliationResult = {
-    hasAnalyticsSheet: false,
-    isConsistent: true,
-    tolerancePercent: 1, // 1% tolerance for rounding differences
-    holdingsTotalInvested: 0,
-    holdingsTotalCurrent: 0,
-    messages: [],
-  }
-
-  // Calculate totals from parsed holdings
-  result.holdingsTotalInvested = holdings.reduce((sum, h) => sum + h.quantity * h.avg_price, 0)
-  result.holdingsTotalCurrent = holdings.reduce((sum, h) => sum + h.quantity * h.ltp, 0)
-
-  // Look for analytics/summary sheet
-  const analyticsSheetName = workbook.SheetNames.find(name => 
-    /analytics|summary|overview|total/i.test(name)
-  )
-
-  if (!analyticsSheetName) {
-    result.messages.push('No analytics sheet found for reconciliation')
-    return result
-  }
-
-  result.hasAnalyticsSheet = true
-  const analyticsSheet = workbook.Sheets[analyticsSheetName]
-  const analyticsData = XLSX.utils.sheet_to_json(analyticsSheet, { header: 1, defval: '' }) as any[][]
-
-  // Try to find total invested and current value in analytics sheet
-  let foundInvested: number | undefined
-  let foundCurrent: number | undefined
-
-  for (const row of analyticsData) {
-    const rowStr = row.map(c => String(c).toLowerCase()).join(' ')
-    
-    // Look for total invested
-    if (rowStr.includes('total invest') || rowStr.includes('invested amount')) {
-      for (let i = 0; i < row.length; i++) {
-        const val = parseNumber(row[i])
-        if (val > 0 && val > 1000) { // Assume totals are > 1000
-          foundInvested = val
-          break
-        }
-      }
-    }
-    
-    // Look for current/market value
-    if (rowStr.includes('current value') || rowStr.includes('market value') || rowStr.includes('total value')) {
-      for (let i = 0; i < row.length; i++) {
-        const val = parseNumber(row[i])
-        if (val > 0 && val > 1000) {
-          foundCurrent = val
-          break
-        }
-      }
-    }
-  }
-
-  result.analyticsTotalInvested = foundInvested
-  result.analyticsTotalCurrent = foundCurrent
-
-  // Compare if we found values
-  if (foundInvested !== undefined) {
-    result.diffInvested = Math.abs(result.holdingsTotalInvested - foundInvested)
-    const percentDiff = (result.diffInvested / foundInvested) * 100
-    
-    if (percentDiff > result.tolerancePercent) {
-      result.isConsistent = false
-      result.messages.push(
-        `Invested amount mismatch: Holdings total ₹${result.holdingsTotalInvested.toLocaleString('en-IN')} vs Analytics ₹${foundInvested.toLocaleString('en-IN')} (${percentDiff.toFixed(1)}% difference)`
-      )
-    }
-  }
-
-  if (foundCurrent !== undefined) {
-    result.diffCurrent = Math.abs(result.holdingsTotalCurrent - foundCurrent)
-    const percentDiff = (result.diffCurrent / foundCurrent) * 100
-    
-    if (percentDiff > result.tolerancePercent) {
-      result.isConsistent = false
-      result.messages.push(
-        `Current value mismatch: Holdings total ₹${result.holdingsTotalCurrent.toLocaleString('en-IN')} vs Analytics ₹${foundCurrent.toLocaleString('en-IN')} (${percentDiff.toFixed(1)}% difference)`
-      )
-    }
-  }
-
-  if (result.isConsistent) {
-    result.messages.push('Holdings data reconciled successfully with analytics sheet')
-  }
-
-  return result
 }

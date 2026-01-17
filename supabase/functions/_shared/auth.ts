@@ -1,74 +1,96 @@
-import { SupabaseClient, createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+/**
+ * Shared authentication helper for edge functions
+ * Validates JWT tokens and extracts user information
+ */
 
-// Re-export corsHeaders for backward compatibility
-export { corsHeaders } from './cors.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+export const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 export interface AuthResult {
   isValid: boolean
   userId?: string
-  isCronCall: boolean
   error?: string
+  isCronCall?: boolean
 }
 
+/**
+ * Validates the authorization header and returns user info
+ * Supports both JWT tokens and cron secret for scheduled jobs
+ */
 export async function validateAuth(req: Request): Promise<AuthResult> {
-  const authHeader = req.headers.get('Authorization')
-  
-  if (!authHeader) {
-    return { isValid: false, isCronCall: false, error: 'No authorization header' }
-  }
+  const authHeader = req.headers.get('authorization')
+  const cronSecret = Deno.env.get('CRON_SECRET')
+  const providedCronSecret = req.headers.get('x-cron-secret')
   
   // Check for cron secret (for scheduled jobs)
-  const cronSecret = Deno.env.get('CRON_SECRET')
-  if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
+  if (cronSecret && providedCronSecret === cronSecret) {
     return { isValid: true, isCronCall: true }
   }
   
-  // Check for service role key (for internal calls)
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  if (serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`) {
-    return { isValid: true, isCronCall: true }
+  // Check for authorization header
+  if (!authHeader) {
+    return { isValid: false, error: 'Missing authorization header' }
   }
   
-  // Validate JWT token
+  if (!authHeader.startsWith('Bearer ')) {
+    return { isValid: false, error: 'Invalid authorization format' }
+  }
+  
+  const token = authHeader.replace('Bearer ', '')
+  
+  if (!token) {
+    return { isValid: false, error: 'Missing token' }
+  }
+  
+  // Check if this is a service role key call (internal edge function calls)
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (supabaseServiceKey && token === supabaseServiceKey) {
+    return { isValid: true, isCronCall: true } // Treat service role as internal call
+  }
+  
+  // Validate JWT using Supabase service role client
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } }
+  
+  // Use service role client to validate the user's token
+  const supabase = createClient(supabaseUrl, supabaseServiceKey!, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    }
   })
   
-  const { data: { user }, error } = await supabase.auth.getUser()
-  
-  if (error || !user) {
-    return { isValid: false, isCronCall: false, error: error?.message || 'Invalid token' }
-  }
-  
-  return { isValid: true, userId: user.id, isCronCall: false }
-}
-
-export function unauthorizedResponse(message: string): Response {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
-  
-  return new Response(
-    JSON.stringify({ success: false, error: message }),
-    { 
-      status: 401, 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+  try {
+    // Use getUser with the token to validate it
+    const { data: { user }, error } = await supabase.auth.getUser(token)
+    
+    console.log('Auth validation result:', { 
+      hasUser: !!user, 
+      userId: user?.id, 
+      error: error?.message 
+    })
+    
+    if (error || !user) {
+      console.error('Auth validation failed:', error?.message || 'No user returned')
+      return { isValid: false, error: 'Invalid or expired token' }
     }
-  )
+    
+    return { isValid: true, userId: user.id }
+  } catch (err) {
+    console.error('Token validation exception:', err)
+    return { isValid: false, error: 'Token validation failed' }
+  }
 }
 
-export async function authenticateUser(supabase: SupabaseClient) {
-  const { data: { user }, error } = await supabase.auth.getUser()
-
-  if (error) {
-    return { user: null, error: { message: 'Authentication failed: ' + error.message, status: 401 } }
-  }
-  if (!user) {
-    return { user: null, error: { message: 'Authentication failed: No user found', status: 401 } }
-  }
-
-  return { user, error: null }
+/**
+ * Helper to create unauthorized response
+ */
+export function unauthorizedResponse(message: string): Response {
+  return new Response(
+    JSON.stringify({ error: `Unauthorized: ${message}` }),
+    { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  )
 }

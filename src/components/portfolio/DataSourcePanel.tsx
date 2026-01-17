@@ -1,12 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { KiteConnectCard } from './KiteConnectCard';
 import { BrokerPlaceholderCard, AVAILABLE_BROKERS } from './BrokerPlaceholderCard';
-import { ExcelUploadProgress } from './ExcelUploadProgress';
-import { UploadProgress } from '@/hooks/useExcelUploadProgress';
+import { KiteLoginModal } from './KiteLoginModal';
+import { useKiteSession } from '@/hooks/useKiteSession';
 
 interface SyncStatus {
   source: string;
@@ -27,9 +27,8 @@ interface DataSourcePanelProps {
   isSyncing: boolean;
   syncStatus: SyncStatus[];
   lastSync: Date | null;
+  showMandatoryKiteLogin?: boolean;
   syncProgress?: SyncProgress;
-  uploadProgress?: UploadProgress;
-  onResetUploadProgress?: () => void;
 }
 
 export function DataSourcePanel({
@@ -38,13 +37,15 @@ export function DataSourcePanel({
   isSyncing,
   syncStatus,
   lastSync,
+  showMandatoryKiteLogin = false,
   syncProgress,
-  uploadProgress,
-  onResetUploadProgress,
 }: DataSourcePanelProps) {
   const [dragActive, setDragActive] = useState(false);
-  const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { isSessionValid, loginUrl, loginUrlError, isLoading: isKiteLoading } = useKiteSession();
+
+  // Check if we need to show the mandatory Kite login
+  const shouldShowKiteModal = showMandatoryKiteLogin && !isSessionValid && !isKiteLoading;
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -63,7 +64,6 @@ export function DataSourcePanel({
 
     const files = e.dataTransfer.files;
     if (files && files[0]) {
-      setLastUploadedFile(files[0]);
       await onUploadINDMoney(files[0]);
     }
   };
@@ -71,18 +71,7 @@ export function DataSourcePanel({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files[0]) {
-      setLastUploadedFile(files[0]);
       await onUploadINDMoney(files[0]);
-    }
-    // Reset input to allow re-uploading the same file
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleRetry = async () => {
-    if (lastUploadedFile) {
-      await onUploadINDMoney(lastUploadedFile);
     }
   };
 
@@ -93,18 +82,23 @@ export function DataSourcePanel({
   const zerodhaStatus = getLatestStatus('Zerodha');
   const indmoneyStatus = getLatestStatus('INDMoney');
 
-  // Check if upload is in progress
-  const isUploadActive = uploadProgress && uploadProgress.step !== 'idle';
-  const isUploadInProgress = uploadProgress && 
-    !['idle', 'complete', 'partial', 'error'].includes(uploadProgress.step);
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="space-y-6"
-    >
+    <>
+      {/* Mandatory Kite Login Modal */}
+      {shouldShowKiteModal && (
+        <KiteLoginModal
+          loginUrl={loginUrl}
+          loginUrlError={loginUrlError}
+          isLoading={isKiteLoading}
+        />
+      )}
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="space-y-6"
+      >
         {/* Section Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -142,36 +136,17 @@ export function DataSourcePanel({
                     <CardDescription>Upload Holdings Report Excel</CardDescription>
                   </div>
                 </div>
-                <StatusBadge 
-                  status={indmoneyStatus} 
-                  isUploading={isUploadInProgress}
-                  uploadProgress={uploadProgress}
-                />
+                <StatusBadge status={indmoneyStatus} />
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {/* Upload Progress Indicator */}
-                {uploadProgress && (
-                  <ExcelUploadProgress
-                    progress={uploadProgress}
-                    onReset={onResetUploadProgress}
-                    onRetry={lastUploadedFile ? handleRetry : undefined}
-                  />
-                )}
-
-                {/* Previous sync status (show when not actively uploading) */}
-                {!isUploadActive && indmoneyStatus && (
+                {indmoneyStatus && (
                   <div className="text-sm text-muted-foreground">
                     {indmoneyStatus.status === 'success' ? (
                       <span className="flex items-center gap-2">
                         <CheckCircle2 className="h-4 w-4 text-profit" />
                         {indmoneyStatus.holdings_count} holdings imported
-                      </span>
-                    ) : indmoneyStatus.status === 'partial' ? (
-                      <span className="flex items-center gap-2 text-warning">
-                        <AlertTriangle className="h-4 w-4" />
-                        {indmoneyStatus.holdings_count} holdings imported with warnings
                       </span>
                     ) : (
                       <span className="flex items-center gap-2 text-loss">
@@ -181,40 +156,35 @@ export function DataSourcePanel({
                     )}
                   </div>
                 )}
-
-                {/* Drop zone (hide during active upload) */}
-                {!isUploadInProgress && (
-                  <div
-                    className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
-                      dragActive
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50'
-                    } ${isSyncing ? 'opacity-50 pointer-events-none' : ''}`}
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
-                    onClick={() => !isSyncing && fileInputRef.current?.click()}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".xlsx,.xls"
-                      onChange={handleFileChange}
-                      className="hidden"
-                      disabled={isSyncing}
-                    />
-                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">
-                      {dragActive
-                        ? 'Drop the file here'
-                        : 'Drag & drop or click to upload'}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Indmoney-HoldingsReport*.xlsx
-                    </p>
-                  </div>
-                )}
+                <div
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                    dragActive
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    {dragActive
+                      ? 'Drop the file here'
+                      : 'Drag & drop or click to upload'}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Indmoney-HoldingsReport*.xlsx
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -237,46 +207,17 @@ export function DataSourcePanel({
           </div>
         </div>
       </motion.div>
+    </>
   );
 }
 
-
-interface StatusBadgeProps {
-  status?: SyncStatus;
-  isUploading?: boolean;
-  uploadProgress?: UploadProgress;
-}
-
-function StatusBadge({ status, isUploading, uploadProgress }: StatusBadgeProps) {
-  // Show uploading state
-  if (isUploading) {
-    return <Badge variant="outline" className="text-primary border-primary/30 animate-pulse">Uploading...</Badge>;
-  }
-
-  // Show based on upload progress completion state
-  if (uploadProgress) {
-    if (uploadProgress.step === 'complete') {
-      return <Badge className="bg-profit/20 text-profit border-profit/30">Synced</Badge>;
-    }
-    if (uploadProgress.step === 'partial') {
-      return <Badge className="bg-warning/20 text-warning border-warning/30">Partial</Badge>;
-    }
-    if (uploadProgress.step === 'error') {
-      return <Badge variant="destructive">Error</Badge>;
-    }
-  }
-
-  // Fall back to status from sync_logs
+function StatusBadge({ status }: { status?: SyncStatus }) {
   if (!status) {
     return <Badge variant="outline" className="text-muted-foreground">Not synced</Badge>;
   }
 
   if (status.status === 'success') {
     return <Badge className="bg-profit/20 text-profit border-profit/30">Synced</Badge>;
-  }
-
-  if (status.status === 'partial') {
-    return <Badge className="bg-warning/20 text-warning border-warning/30">Partial</Badge>;
   }
 
   return <Badge variant="destructive">Error</Badge>;
