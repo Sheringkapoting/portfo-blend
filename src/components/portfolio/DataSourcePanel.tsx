@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { KiteConnectCard } from './KiteConnectCard';
-import { BrokerPlaceholderCard, AVAILABLE_BROKERS } from './BrokerPlaceholderCard';
+import { BrokerCSVUpload, SUPPORTED_BROKERS } from './BrokerCSVUpload';
 import { KiteLoginModal } from './KiteLoginModal';
 import { useKiteSession } from '@/hooks/useKiteSession';
 
@@ -25,6 +25,7 @@ interface SyncProgress {
 interface DataSourcePanelProps {
   onSyncZerodha: () => Promise<void>;
   onUploadINDMoney: (file: File) => Promise<void>;
+  onUploadBrokerCSV: (file: File, broker: string) => Promise<void>;
   isSyncing: boolean;
   syncStatus: SyncStatus[];
   lastSync: Date | null;
@@ -35,6 +36,7 @@ interface DataSourcePanelProps {
 export function DataSourcePanel({
   onSyncZerodha,
   onUploadINDMoney,
+  onUploadBrokerCSV,
   isSyncing,
   syncStatus,
   lastSync,
@@ -260,18 +262,20 @@ export function DataSourcePanel({
           </Card>
         </div>
 
-        {/* Coming Soon Brokers */}
+        {/* Other Brokers - CSV Import */}
         <div className="mt-8">
           <div className="mb-4">
-            <h3 className="text-md font-medium text-muted-foreground">Coming Soon</h3>
-            <p className="text-sm text-muted-foreground/70">More broker integrations are on the way</p>
+            <h3 className="text-md font-medium text-muted-foreground">Other Brokers</h3>
+            <p className="text-sm text-muted-foreground/70">Import holdings from other brokers via CSV/Excel export</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {AVAILABLE_BROKERS.map((brokerId, index) => (
-              <BrokerPlaceholderCard
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {SUPPORTED_BROKERS.map((brokerId, index) => (
+              <BrokerCSVUpload
                 key={brokerId}
                 brokerId={brokerId}
+                onUpload={onUploadBrokerCSV}
                 delay={0.1 + index * 0.05}
+                syncStatus={getLatestStatus(brokerId === 'angel' ? 'Angel One' : 'Groww')}
               />
             ))}
           </div>
