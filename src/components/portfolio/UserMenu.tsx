@@ -1,4 +1,4 @@
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -12,10 +12,12 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useTheme } from '@/hooks/useTheme';
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
   const handleSignOut = async () => {
     await signOut();
@@ -46,6 +48,20 @@ export function UserMenu() {
             </p>
           </div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={toggleTheme}>
+          {theme === 'dark' ? (
+            <>
+              <Sun className="mr-2 h-4 w-4" />
+              Light Mode
+            </>
+          ) : (
+            <>
+              <Moon className="mr-2 h-4 w-4" />
+              Dark Mode
+            </>
+          )}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
           <LogOut className="mr-2 h-4 w-4" />

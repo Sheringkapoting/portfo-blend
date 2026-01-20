@@ -32,6 +32,9 @@ const ASSET_TYPES = [
   { id: 'Debt MF', label: 'Debt MFs', icon: '📋' },
   { id: 'Commodity MF', label: 'Commodity MFs', icon: '🏦' },
   { id: 'Bond', label: 'Bonds', icon: '📜' },
+  { id: 'EPF', label: 'EPF', icon: '🏛️' },
+  { id: 'PPF', label: 'PPF', icon: '🏦' },
+  { id: 'NPS', label: 'NPS', icon: '👴' },
 ];
 
 export function CaptureModal({
