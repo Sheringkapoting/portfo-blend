@@ -1,9 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { validateAuth, unauthorizedResponse, corsHeaders } from '../_shared/auth.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -11,18 +7,30 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // SECURITY: Require authentication
+    const authResult = await validateAuth(req)
+    if (!authResult.isValid) {
+      return unauthorizedResponse(authResult.error || 'Authentication required')
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
     const apiKey = Deno.env.get('KITE_API_KEY')
 
-    // Get the most recent session (regardless of user_id since sessions can be null)
-    const { data: session, error: sessionError } = await supabase
+    // SECURITY: Only get the authenticated user's session (or any session for cron/service calls)
+    let sessionQuery = supabase
       .from('kite_sessions')
       .select('id, access_token, user_id')
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle()
+
+    // If this is a user request (not cron/service), scope to their session
+    if (authResult.userId) {
+      sessionQuery = sessionQuery.eq('user_id', authResult.userId)
+    }
+
+    const { data: session, error: sessionError } = await sessionQuery.maybeSingle()
     
     if (sessionError) {
       console.error('Error fetching session:', sessionError)
@@ -30,7 +38,7 @@ Deno.serve(async (req) => {
     }
     
     if (!session) {
-      console.log('No active session to disconnect')
+      console.log('No active session to disconnect for user:', authResult.userId)
       return new Response(
         JSON.stringify({ success: true, message: 'No active session to disconnect' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -41,7 +49,8 @@ Deno.serve(async (req) => {
       sessionId: session.id,
       hasAccessToken: !!session.access_token, 
       hasApiKey: !!apiKey,
-      userId: session.user_id
+      userId: session.user_id,
+      requestingUserId: authResult.userId
     })
 
     // Try to invalidate the token on Kite's side (best effort)
