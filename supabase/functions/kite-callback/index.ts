@@ -16,8 +16,10 @@ Deno.serve(async (req) => {
     const stateParam = url.searchParams.get('state')
     const appUrl = Deno.env.get('APP_URL') || 'https://portfo-blend.lovable.app'
     
-    // Parse state to extract user_id for secure OAuth flow
+    // SECURITY: Parse and validate state to extract user_id
     let userId: string | null = null
+    let stateError: string | null = null
+    
     if (stateParam) {
       try {
         const stateData = JSON.parse(atob(stateParam))
@@ -27,11 +29,75 @@ Deno.serve(async (req) => {
         const stateAge = Date.now() - (stateData.timestamp || 0)
         if (stateAge > 10 * 60 * 1000) {
           console.warn('OAuth state expired')
+          stateError = 'OAuth session expired. Please try again.'
           userId = null
         }
       } catch (e) {
         console.error('Failed to parse OAuth state:', e)
+        stateError = 'Invalid OAuth state. Please try again.'
       }
+    } else {
+      stateError = 'Missing OAuth state. Please login first.'
+    }
+    
+    // SECURITY: Require valid user_id from state
+    if (!userId) {
+      const errorMessage = stateError || 'Authentication required. Please login first.'
+      console.error('OAuth callback without valid user_id:', errorMessage)
+      
+      // For GET requests (initial page load), show error page
+      if (req.method === 'GET' || !requestToken) {
+        return new Response(`
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Authentication Error</title>
+  <style>
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      height: 100vh; 
+      margin: 0;
+      background: #0f0f0f;
+      color: #fff;
+    }
+    .container { text-align: center; max-width: 400px; padding: 20px; }
+    .error { color: #ef4444; margin-bottom: 20px; }
+    .button {
+      display: inline-block;
+      padding: 12px 24px;
+      background: #f97316;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 500;
+    }
+    .button:hover { background: #ea580c; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <p class="error">${errorMessage}</p>
+    <p style="color: #888; margin-bottom: 20px;">Please go back to the app and try connecting again.</p>
+    <a href="${appUrl}" class="button">Return to App</a>
+  </div>
+</body>
+</html>
+        `, {
+          headers: { ...corsHeaders, 'Content-Type': 'text/html' }
+        })
+      }
+      
+      // For POST requests, return JSON error
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: errorMessage 
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
     
     if (!requestToken) {
@@ -171,22 +237,14 @@ Deno.serve(async (req) => {
     const expiresAt = new Date()
     expiresAt.setHours(expiresAt.getHours() + 8) // Conservative 8 hour expiry
 
-    // Delete old sessions for this user and insert new one
-    if (userId) {
-      await supabase.from('kite_sessions').delete().eq('user_id', userId)
-    } else {
-      // If no user_id, delete sessions without user_id (cleanup orphaned sessions)
-      await supabase.from('kite_sessions').delete().is('user_id', null)
-    }
+    // Delete old sessions for this user
+    await supabase.from('kite_sessions').delete().eq('user_id', userId)
     
-    const sessionData: { access_token: string; expires_at: string; user_id?: string } = {
+    // SECURITY: Always set user_id - we validated it exists above
+    const sessionData = {
       access_token: accessToken,
       expires_at: expiresAt.toISOString(),
-    }
-    
-    // Always set user_id if available from OAuth state
-    if (userId) {
-      sessionData.user_id = userId
+      user_id: userId,
     }
     
     const { error: insertError } = await supabase.from('kite_sessions').insert(sessionData)
@@ -196,18 +254,19 @@ Deno.serve(async (req) => {
       throw new Error('Failed to store session')
     }
     
-    console.log('Kite session stored successfully', { userId: userId || 'none' })
+    console.log('Kite session stored successfully for user:', userId)
 
     // Log the successful connection
     await supabase.from('sync_logs').insert({
       source: 'Zerodha',
       status: 'connected',
-      user_id: userId || null,
+      user_id: userId,
       holdings_count: 0,
     })
 
-    // Trigger immediate sync of holdings
+    // Trigger immediate sync of holdings with user context
     try {
+      // Get user's auth token to pass to sync function
       const syncResponse = await fetch(`${supabaseUrl}/functions/v1/zerodha-sync`, {
         method: 'POST',
         headers: {
