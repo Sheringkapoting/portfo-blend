@@ -143,23 +143,37 @@ Deno.serve(async (req) => {
       errorP.style.color = '#ef4444';
       errorP.textContent = 'Error: ' + message;
       container.appendChild(errorP);
+      const link = document.createElement('a');
+      link.href = '${appUrl}';
+      link.textContent = 'Return to App';
+      link.style.cssText = 'display:inline-block;margin-top:20px;padding:12px 24px;background:#f97316;color:white;text-decoration:none;border-radius:8px;';
+      container.appendChild(link);
     }
     
     function showMessage(message) {
       const container = document.querySelector('.container');
-      container.innerHTML = '';
-      const p = document.createElement('p');
-      p.textContent = message;
-      container.appendChild(p);
+      const p = container.querySelector('p');
+      if (p) p.textContent = message;
     }
     
     const params = new URLSearchParams(window.location.search);
     const requestToken = params.get('request_token');
-    const stateParam = params.get('state');
+    
+    // Try to get state from URL first, then from sessionStorage as fallback
+    let stateParam = params.get('state');
+    if (!stateParam) {
+      stateParam = sessionStorage.getItem('kite_oauth_state');
+      console.log('[Callback] Retrieved state from sessionStorage:', stateParam ? 'found' : 'not found');
+    }
+    
+    // Clear sessionStorage state after retrieval
+    sessionStorage.removeItem('kite_oauth_state');
     
     if (!stateParam) {
       showError('Missing authentication state. Please return to the app and try connecting again.');
     } else if (requestToken) {
+      showMessage('Verifying with Zerodha...');
+      
       let postUrl = window.location.origin + window.location.pathname + '?request_token=' + encodeURIComponent(requestToken);
       postUrl += '&state=' + encodeURIComponent(stateParam);
       
@@ -167,6 +181,7 @@ Deno.serve(async (req) => {
       .then(r => r.json())
       .then(data => {
         if (data.success) {
+          showMessage('Connected! Redirecting...');
           window.location.href = '${appUrl}?kite_connected=true';
         } else {
           showError(data.error || 'Connection failed');
@@ -176,7 +191,7 @@ Deno.serve(async (req) => {
         showError(err.message || 'Request failed');
       });
     } else {
-      showMessage('Waiting for Zerodha authentication...');
+      showError('No request token received from Zerodha. Please try again.');
     }
   </script>
 </body>

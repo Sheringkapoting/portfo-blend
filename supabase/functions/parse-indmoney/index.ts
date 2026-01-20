@@ -465,14 +465,25 @@ function parseHoldings(
         continue
       }
 
-      // Validate Broker for each record
+      // List of asset types that don't require broker info (account-based assets)
+      const accountBasedAssets = ['EPF', 'PPF', 'NPS', 'GRATUITY', 'FD', 'RD', 'SAVINGS', 'PF']
+      const isAccountBasedAsset = accountBasedAssets.includes(assetType)
+
+      // Validate Broker for each record (except account-based assets)
+      let effectiveBroker = broker
       if (!broker || broker.toLowerCase() === 'n/a' || broker === '-') {
-        skipped.push({
-          row: i + 1,
-          reason: 'Missing or invalid broker information',
-          data: { investment, assetType }
-        })
-        continue
+        if (isAccountBasedAsset) {
+          // For account-based assets, use asset type as the "broker/source"
+          effectiveBroker = assetType
+          console.log(`[parse-indmoney] Using asset type as broker for ${assetType}: ${investment}`)
+        } else {
+          skipped.push({
+            row: i + 1,
+            reason: 'Missing or invalid broker information',
+            data: { investment, assetType }
+          })
+          continue
+        }
       }
 
       // Skip if no meaningful data
@@ -537,7 +548,7 @@ function parseHoldings(
         isin,
         user_id: userId,
         xirr: xirrValue !== null && isFinite(xirrValue) ? Math.round(xirrValue * 100) / 100 : undefined,
-        broker: broker,
+        broker: effectiveBroker,
       }
 
       // Validate the holding
