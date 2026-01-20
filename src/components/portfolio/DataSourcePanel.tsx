@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { KiteConnectCard } from './KiteConnectCard';
 import { BrokerPlaceholderCard, AVAILABLE_BROKERS } from './BrokerPlaceholderCard';
 import { KiteLoginModal } from './KiteLoginModal';
@@ -41,6 +42,9 @@ export function DataSourcePanel({
   syncProgress,
 }: DataSourcePanelProps) {
   const [dragActive, setDragActive] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'complete' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { isSessionValid, loginUrl, loginUrlError, isLoading: isKiteLoading } = useKiteSession();
 
@@ -57,6 +61,45 @@ export function DataSourcePanel({
     }
   };
 
+  const handleUploadWithProgress = async (file: File) => {
+    setIsUploading(true);
+    setUploadStatus('uploading');
+    setUploadProgress(10);
+
+    try {
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev < 40) return prev + 10;
+          return prev;
+        });
+      }, 200);
+
+      setUploadProgress(50);
+      setUploadStatus('processing');
+
+      await onUploadINDMoney(file);
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+      setUploadStatus('complete');
+
+      // Reset after showing completion
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadProgress(0);
+        setUploadStatus('idle');
+      }, 2000);
+    } catch (error) {
+      setUploadStatus('error');
+      setTimeout(() => {
+        setIsUploading(false);
+        setUploadProgress(0);
+        setUploadStatus('idle');
+      }, 3000);
+    }
+  };
+
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -64,14 +107,14 @@ export function DataSourcePanel({
 
     const files = e.dataTransfer.files;
     if (files && files[0]) {
-      await onUploadINDMoney(files[0]);
+      await handleUploadWithProgress(files[0]);
     }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files[0]) {
-      await onUploadINDMoney(files[0]);
+      await handleUploadWithProgress(files[0]);
     }
   };
 
@@ -128,20 +171,37 @@ export function DataSourcePanel({
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-500/10">
-                    <FileSpreadsheet className="h-5 w-5 text-blue-500" />
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <FileSpreadsheet className="h-5 w-5 text-primary" />
                   </div>
                   <div>
                     <CardTitle className="text-lg">INDMoney</CardTitle>
                     <CardDescription>Upload Holdings Report Excel</CardDescription>
                   </div>
                 </div>
-                <StatusBadge status={indmoneyStatus} />
+                <StatusBadge status={indmoneyStatus} isUploading={isUploading} />
               </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {indmoneyStatus && (
+                {/* Upload Progress Indicator */}
+                {isUploading && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {uploadStatus === 'uploading' && 'Uploading file...'}
+                        {uploadStatus === 'processing' && 'Processing holdings...'}
+                        {uploadStatus === 'complete' && 'Import complete!'}
+                        {uploadStatus === 'error' && 'Upload failed'}
+                      </span>
+                      <span className="text-muted-foreground">{uploadProgress}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-2" />
+                  </div>
+                )}
+
+                {!isUploading && indmoneyStatus && (
                   <div className="text-sm text-muted-foreground">
                     {indmoneyStatus.status === 'success' ? (
                       <span className="flex items-center gap-2">
@@ -156,17 +216,20 @@ export function DataSourcePanel({
                     )}
                   </div>
                 )}
+                
                 <div
-                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
-                    dragActive
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50'
+                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    isUploading 
+                      ? 'border-muted bg-muted/5 cursor-not-allowed opacity-50' 
+                      : dragActive
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50 cursor-pointer'
                   }`}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
+                  onDragEnter={!isUploading ? handleDrag : undefined}
+                  onDragLeave={!isUploading ? handleDrag : undefined}
+                  onDragOver={!isUploading ? handleDrag : undefined}
+                  onDrop={!isUploading ? handleDrop : undefined}
+                  onClick={() => !isUploading && fileInputRef.current?.click()}
                 >
                   <input
                     ref={fileInputRef}
@@ -174,12 +237,19 @@ export function DataSourcePanel({
                     accept=".xlsx,.xls"
                     onChange={handleFileChange}
                     className="hidden"
+                    disabled={isUploading}
                   />
-                  <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  {isUploading ? (
+                    <Loader2 className="h-8 w-8 mx-auto mb-2 text-muted-foreground animate-spin" />
+                  ) : (
+                    <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  )}
                   <p className="text-sm text-muted-foreground">
-                    {dragActive
-                      ? 'Drop the file here'
-                      : 'Drag & drop or click to upload'}
+                    {isUploading 
+                      ? 'Processing your file...'
+                      : dragActive
+                        ? 'Drop the file here'
+                        : 'Drag & drop or click to upload'}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Indmoney-HoldingsReport*.xlsx
@@ -211,7 +281,16 @@ export function DataSourcePanel({
   );
 }
 
-function StatusBadge({ status }: { status?: SyncStatus }) {
+function StatusBadge({ status, isUploading }: { status?: SyncStatus; isUploading?: boolean }) {
+  if (isUploading) {
+    return (
+      <Badge className="bg-primary/20 text-primary border-primary/30">
+        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+        Syncing
+      </Badge>
+    );
+  }
+
   if (!status) {
     return <Badge variant="outline" className="text-muted-foreground">Not synced</Badge>;
   }

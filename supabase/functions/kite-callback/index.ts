@@ -157,11 +157,11 @@ Deno.serve(async (req) => {
     const requestToken = params.get('request_token');
     const stateParam = params.get('state');
     
-    if (requestToken) {
+    if (!stateParam) {
+      showError('Missing authentication state. Please return to the app and try connecting again.');
+    } else if (requestToken) {
       let postUrl = window.location.origin + window.location.pathname + '?request_token=' + encodeURIComponent(requestToken);
-      if (stateParam) {
-        postUrl += '&state=' + encodeURIComponent(stateParam);
-      }
+      postUrl += '&state=' + encodeURIComponent(stateParam);
       
       fetch(postUrl, { method: 'POST' })
       .then(r => r.json())
@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
         showError(err.message || 'Request failed');
       });
     } else {
-      showMessage('No request token found');
+      showMessage('Waiting for Zerodha authentication...');
     }
   </script>
 </body>
