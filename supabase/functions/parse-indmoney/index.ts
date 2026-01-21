@@ -465,25 +465,14 @@ function parseHoldings(
         continue
       }
 
-      // List of asset types that don't require broker info (account-based assets)
-      const accountBasedAssets = ['EPF', 'PPF', 'NPS', 'GRATUITY', 'FD', 'RD', 'SAVINGS', 'PF']
-      const isAccountBasedAsset = accountBasedAssets.includes(assetType)
-
-      // Validate Broker for each record (except account-based assets)
-      let effectiveBroker = broker
+      // Validate Broker for each record
       if (!broker || broker.toLowerCase() === 'n/a' || broker === '-') {
-        if (isAccountBasedAsset) {
-          // For account-based assets, use asset type as the "broker/source"
-          effectiveBroker = assetType
-          console.log(`[parse-indmoney] Using asset type as broker for ${assetType}: ${investment}`)
-        } else {
-          skipped.push({
-            row: i + 1,
-            reason: 'Missing or invalid broker information',
-            data: { investment, assetType }
-          })
-          continue
-        }
+        skipped.push({
+          row: i + 1,
+          reason: 'Missing or invalid broker information',
+          data: { investment, assetType }
+        })
+        continue
       }
 
       // Skip if no meaningful data
@@ -504,29 +493,14 @@ function parseHoldings(
       // Calculate avg price (invested / units) or use market value as fallback
       let avgPrice = 0
       let ltp = 0
-      let quantity = totalUnits
-
-      // Handle retirement accounts (EPF, PPF, NPS) and similar assets without units
-      const isRetirementAsset = ['EPF', 'PPF', 'NPS', 'GRATUITY', 'FD', 'RD', 'SAVINGS'].includes(assetType)
 
       if (totalUnits > 0) {
         avgPrice = investedAmount / totalUnits
         ltp = marketValue / totalUnits
-      } else if (isRetirementAsset || (investedAmount > 0 && marketValue > 0)) {
-        // For retirement accounts and assets without units, use 1 unit with total value
-        quantity = 1
+      } else if (assetType === 'EPF' || assetType === 'PPF' || assetType === 'NPS') {
+        // For retirement accounts, use 1 unit with total value
         avgPrice = investedAmount
         ltp = marketValue
-      }
-
-      // Skip if we still don't have valid pricing data
-      if (avgPrice <= 0 && ltp <= 0 && !isRetirementAsset) {
-        skipped.push({
-          row: i + 1,
-          reason: 'Could not calculate price from data',
-          data: { investment, assetType, totalUnits, investedAmount, marketValue }
-        })
-        continue
       }
 
       // Generate a symbol with length limit
@@ -540,7 +514,7 @@ function parseHoldings(
         name: investment,
         type: holdingType,
         sector,
-        quantity: quantity > 0 ? quantity : 1,
+        quantity: totalUnits > 0 ? totalUnits : 1,
         avg_price: Math.round(avgPrice * 100) / 100,
         ltp: Math.round(ltp * 100) / 100,
         exchange,
@@ -548,7 +522,7 @@ function parseHoldings(
         isin,
         user_id: userId,
         xirr: xirrValue !== null && isFinite(xirrValue) ? Math.round(xirrValue * 100) / 100 : undefined,
-        broker: effectiveBroker,
+        broker: broker,
       }
 
       // Validate the holding

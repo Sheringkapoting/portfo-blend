@@ -53,18 +53,6 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
   const handleLogin = () => {
     if (loginUrl) {
       setIsAuthRedirecting(true);
-      // Extract state from the login URL and store it in sessionStorage
-      // This is needed because Zerodha may not preserve the state parameter
-      try {
-        const url = new URL(loginUrl);
-        const state = url.searchParams.get('state');
-        if (state) {
-          sessionStorage.setItem('kite_oauth_state', state);
-          console.log('[KiteConnect] Stored OAuth state in sessionStorage');
-        }
-      } catch (e) {
-        console.error('[KiteConnect] Error extracting state:', e);
-      }
       window.location.href = loginUrl;
     }
   };

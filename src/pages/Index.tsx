@@ -40,7 +40,6 @@ const Index = () => {
     syncStatus,
     syncZerodha,
     uploadINDMoneyExcel,
-    uploadBrokerCSV,
     refetch,
   } = usePortfolioData();
 
@@ -356,7 +355,6 @@ const Index = () => {
             <DataSourcePanel
               onSyncZerodha={syncZerodha}
               onUploadINDMoney={uploadINDMoneyExcel}
-              onUploadBrokerCSV={uploadBrokerCSV}
               isSyncing={isSyncing}
               syncStatus={syncStatus}
               lastSync={lastSync}

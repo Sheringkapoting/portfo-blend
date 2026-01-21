@@ -161,34 +161,6 @@ export function usePortfolioData() {
     }
   }, [fetchHoldings, fetchSyncStatus]);
 
-  const uploadBrokerCSV = useCallback(async (file: File, broker: string) => {
-    setIsSyncing(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('broker', broker);
-
-      const { data, error } = await supabase.functions.invoke('parse-broker-csv', {
-        body: formData,
-      });
-      
-      if (error) throw error;
-      
-      if (data.success) {
-        toast.success(data.message);
-        await fetchHoldings();
-        await fetchSyncStatus();
-      } else {
-        toast.error(data.error || `Failed to parse ${broker} file`);
-      }
-    } catch (error: any) {
-      console.error(`${broker} upload error:`, error);
-      toast.error(error.message || `Failed to upload ${broker} file`);
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [fetchHoldings, fetchSyncStatus]);
-
   useEffect(() => {
     fetchHoldings();
     fetchSyncStatus();
@@ -203,7 +175,6 @@ export function usePortfolioData() {
     syncZerodha,
     syncZerodhaWithRetry,
     uploadINDMoneyExcel,
-    uploadBrokerCSV,
     refetch: fetchHoldings,
   };
 }
