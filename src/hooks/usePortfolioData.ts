@@ -134,7 +134,7 @@ export function usePortfolioData() {
     return false;
   }, [fetchHoldings, fetchSyncStatus]);
 
-  const uploadINDMoneyExcel = useCallback(async (file: File) => {
+  const uploadINDMoneyExcel = useCallback(async (file: File): Promise<{ success: boolean; holdings_count?: number; error?: string }> => {
     setIsSyncing(true);
     try {
       const formData = new FormData();
@@ -150,12 +150,15 @@ export function usePortfolioData() {
         toast.success(data.message);
         await fetchHoldings();
         await fetchSyncStatus();
+        return { success: true, holdings_count: data.holdings_count };
       } else {
         toast.error(data.error || 'Failed to parse INDMoney file');
+        return { success: false, error: data.error || 'Failed to parse INDMoney file' };
       }
     } catch (error: any) {
       console.error('INDMoney upload error:', error);
       toast.error(error.message || 'Failed to upload INDMoney file');
+      return { success: false, error: error.message || 'Failed to upload INDMoney file' };
     } finally {
       setIsSyncing(false);
     }

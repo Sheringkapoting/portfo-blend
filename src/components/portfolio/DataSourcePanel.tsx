@@ -1,11 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { KiteConnectCard } from './KiteConnectCard';
 import { BrokerPlaceholderCard, AVAILABLE_BROKERS } from './BrokerPlaceholderCard';
 import { KiteLoginModal } from './KiteLoginModal';
+import { UploadProgressIndicator, UploadStep } from './UploadProgressIndicator';
 import { useKiteSession } from '@/hooks/useKiteSession';
 
 interface SyncStatus {
@@ -23,7 +24,7 @@ interface SyncProgress {
 
 interface DataSourcePanelProps {
   onSyncZerodha: () => Promise<void>;
-  onUploadINDMoney: (file: File) => Promise<void>;
+  onUploadINDMoney: (file: File) => Promise<{ success: boolean; holdings_count?: number; error?: string }>;
   isSyncing: boolean;
   syncStatus: SyncStatus[];
   lastSync: Date | null;
@@ -41,6 +42,9 @@ export function DataSourcePanel({
   syncProgress,
 }: DataSourcePanelProps) {
   const [dragActive, setDragActive] = useState(false);
+  const [uploadStep, setUploadStep] = useState<UploadStep>('idle');
+  const [uploadMessage, setUploadMessage] = useState('');
+  const [uploadedHoldingsCount, setUploadedHoldingsCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { isSessionValid, loginUrl, loginUrlError, isLoading: isKiteLoading } = useKiteSession();
 
@@ -57,6 +61,56 @@ export function DataSourcePanel({
     }
   };
 
+  const handleUpload = async (file: File) => {
+    try {
+      // Step 1: Uploading
+      setUploadStep('uploading');
+      setUploadMessage(`Uploading ${file.name}...`);
+      
+      // Small delay to show the uploading state
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Step 2: Parsing
+      setUploadStep('parsing');
+      setUploadMessage('Parsing Excel file...');
+      
+      // Step 3: Syncing (this is where the actual upload happens)
+      setUploadStep('syncing');
+      setUploadMessage('Syncing holdings to database...');
+      
+      const result = await onUploadINDMoney(file);
+      
+      if (result.success) {
+        setUploadStep('complete');
+        setUploadedHoldingsCount(result.holdings_count || 0);
+        setUploadMessage(`Successfully imported ${result.holdings_count || 0} holdings!`);
+        
+        // Reset after 3 seconds
+        setTimeout(() => {
+          setUploadStep('idle');
+          setUploadMessage('');
+        }, 3000);
+      } else {
+        setUploadStep('error');
+        setUploadMessage(result.error || 'Failed to import holdings');
+        
+        // Reset after 5 seconds
+        setTimeout(() => {
+          setUploadStep('idle');
+          setUploadMessage('');
+        }, 5000);
+      }
+    } catch (error: any) {
+      setUploadStep('error');
+      setUploadMessage(error.message || 'Upload failed');
+      
+      setTimeout(() => {
+        setUploadStep('idle');
+        setUploadMessage('');
+      }, 5000);
+    }
+  };
+
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -64,14 +118,18 @@ export function DataSourcePanel({
 
     const files = e.dataTransfer.files;
     if (files && files[0]) {
-      await onUploadINDMoney(files[0]);
+      await handleUpload(files[0]);
     }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files[0]) {
-      await onUploadINDMoney(files[0]);
+      await handleUpload(files[0]);
+    }
+    // Reset the input so the same file can be uploaded again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -81,6 +139,8 @@ export function DataSourcePanel({
 
   const zerodhaStatus = getLatestStatus('Zerodha');
   const indmoneyStatus = getLatestStatus('INDMoney');
+
+  const isUploading = uploadStep !== 'idle' && uploadStep !== 'complete' && uploadStep !== 'error';
 
   return (
     <>
@@ -141,23 +201,38 @@ export function DataSourcePanel({
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {indmoneyStatus && (
-                  <div className="text-sm text-muted-foreground">
-                    {indmoneyStatus.status === 'success' ? (
-                      <span className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-profit" />
-                        {indmoneyStatus.holdings_count} holdings imported
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-2 text-loss">
-                        <XCircle className="h-4 w-4" />
-                        {indmoneyStatus.error_message}
-                      </span>
-                    )}
-                  </div>
-                )}
+                {/* Show upload progress or status */}
+                <AnimatePresence mode="wait">
+                  {uploadStep !== 'idle' ? (
+                    <UploadProgressIndicator 
+                      step={uploadStep} 
+                      message={uploadMessage}
+                      holdingsCount={uploadedHoldingsCount}
+                    />
+                  ) : indmoneyStatus ? (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-sm text-muted-foreground"
+                    >
+                      {indmoneyStatus.status === 'success' ? (
+                        <span className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-profit" />
+                          {indmoneyStatus.holdings_count} holdings imported
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2 text-loss">
+                          <XCircle className="h-4 w-4" />
+                          {indmoneyStatus.error_message}
+                        </span>
+                      )}
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+
                 <div
                   className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                    isUploading ? 'opacity-50 pointer-events-none' :
                     dragActive
                       ? 'border-primary bg-primary/5'
                       : 'border-border hover:border-primary/50'
@@ -166,7 +241,7 @@ export function DataSourcePanel({
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => !isUploading && fileInputRef.current?.click()}
                 >
                   <input
                     ref={fileInputRef}
@@ -174,6 +249,7 @@ export function DataSourcePanel({
                     accept=".xlsx,.xls"
                     onChange={handleFileChange}
                     className="hidden"
+                    disabled={isUploading}
                   />
                   <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
