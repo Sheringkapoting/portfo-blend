@@ -43,11 +43,11 @@ Deno.serve(async (req) => {
     }
 
     // Try to get access token from stored session
-    // Priority: 1) User's own session, 2) Any valid session (for null user_id cases), 3) Env variable
+    // Only get user-specific session - no cross-user fallback for security
     let accessToken = ''
     let finalSession = null
     
-    // First, try to get user-specific session
+    // Get user-specific session only
     if (authResult.userId) {
       const { data: userSession } = await supabase
         .from('kite_sessions')
@@ -62,26 +62,31 @@ Deno.serve(async (req) => {
       }
     }
     
-    // If no user-specific session, try to get the most recent valid session (may have null user_id)
-    if (!finalSession) {
-      const { data: anySession } = await supabase
+    // Check for orphan sessions (user_id is null) only during OAuth callback recovery
+    // This allows the first sync after OAuth to claim the session
+    if (!finalSession && authResult.userId) {
+      const { data: orphanSession } = await supabase
         .from('kite_sessions')
         .select('*')
+        .is('user_id', null)
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
       
-      if (anySession) {
-        finalSession = anySession
+      if (orphanSession) {
+        // Claim this orphan session for the current user
+        const { error: updateError } = await supabase
+          .from('kite_sessions')
+          .update({ user_id: authResult.userId })
+          .eq('id', orphanSession.id)
+          .is('user_id', null) // Extra safety: only update if still null
         
-        // Update the session to associate with this user for future queries
-        if (authResult.userId && !anySession.user_id) {
-          await supabase
-            .from('kite_sessions')
-            .update({ user_id: authResult.userId })
-            .eq('id', anySession.id)
-          console.log('Associated orphan session with user:', authResult.userId)
+        if (!updateError) {
+          finalSession = { ...orphanSession, user_id: authResult.userId }
+          console.log('Claimed orphan session for user:', authResult.userId)
+        } else {
+          console.error('Failed to claim orphan session:', updateError)
         }
       }
     }
@@ -89,9 +94,6 @@ Deno.serve(async (req) => {
     if (finalSession) {
       accessToken = finalSession.access_token
       console.log('Using session:', finalSession.id, 'expires:', finalSession.expires_at)
-    } else {
-      // Fall back to environment variable (for backward compatibility)
-      accessToken = Deno.env.get('KITE_ACCESS_TOKEN') || ''
     }
     
     if (!accessToken) {

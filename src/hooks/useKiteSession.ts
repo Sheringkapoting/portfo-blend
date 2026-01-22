@@ -33,22 +33,39 @@ export function useKiteSession(): UseKiteSessionReturn {
 
   const fetchSession = useCallback(async (): Promise<KiteSession | null> => {
     try {
-      const { data, error } = await supabase
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
+      
+      // First try to find user's own session
+      if (userId) {
+        const { data, error } = await supabase
+          .from('kite_sessions_status')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!error && data) {
+          const sessionData = data as KiteSession;
+          setSession(sessionData);
+          setIsLoading(false);
+          return sessionData;
+        }
+      }
+      
+      // Fallback: Check for orphan sessions (for OAuth callback that hasn't associated yet)
+      const { data: orphanData, error: orphanError } = await supabase
         .from('kite_sessions_status')
         .select('*')
+        .is('user_id', null)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (error) {
-        console.error('[useKiteSession] Error fetching session:', error);
-        setSession(null);
-        setIsLoading(false);
-        return null;
-      }
-
-      if (data) {
-        const sessionData = data as KiteSession;
+      if (!orphanError && orphanData) {
+        const sessionData = orphanData as KiteSession;
         setSession(sessionData);
         setIsLoading(false);
         return sessionData;

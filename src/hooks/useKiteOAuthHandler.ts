@@ -42,23 +42,51 @@ export function useKiteOAuthHandler({
     
     console.log('[OAuth] Starting session polling...');
     
+    // Get current user ID for filtering
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id;
+    
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       console.log(`[OAuth] Poll attempt ${attempt}/${maxAttempts}`);
       
       try {
-        // Direct query to ensure we get fresh data
-        const { data, error } = await supabase
+        // First try to find user's own session
+        let query = supabase
           .from('kite_sessions_status')
           .select('*')
           .order('created_at', { ascending: false })
           .limit(1);
         
+        if (userId) {
+          query = query.eq('user_id', userId);
+        }
+        
+        const { data, error } = await query;
         
         if (!error && data && data.length > 0) {
           const session = data[0] as KiteSessionData;
           if (session.is_valid) {
-            console.log('[OAuth] Valid session found!');
+            console.log('[OAuth] Valid session found for user!');
             return session;
+          }
+        }
+        
+        // Fallback: Check for orphan sessions (user_id is null) that might belong to this user
+        // This handles the case where OAuth callback created session before user association
+        if (userId && attempt >= 5) {
+          const { data: orphanData } = await supabase
+            .from('kite_sessions_status')
+            .select('*')
+            .is('user_id', null)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          
+          if (orphanData && orphanData.length > 0) {
+            const orphanSession = orphanData[0] as KiteSessionData;
+            if (orphanSession.is_valid) {
+              console.log('[OAuth] Found orphan session, will be associated on first sync');
+              return orphanSession;
+            }
           }
         }
       } catch (e) {
