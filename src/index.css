@@ -86,6 +86,66 @@
     --sidebar-ring: 190 95% 45%;
   }
 
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 190 95% 40%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+
+    --accent: 190 80% 95%;
+    --accent-foreground: 190 95% 30%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 190 95% 40%;
+
+    /* Light mode custom colors */
+    --profit: 142 71% 35%;
+    --profit-glow: 142 71% 45%;
+    --loss: 0 72% 45%;
+    --loss-glow: 0 72% 55%;
+    --neutral: 220 9% 46%;
+    
+    /* Chart Colors - adjusted for light mode */
+    --chart-1: 190 95% 40%;
+    --chart-2: 142 71% 40%;
+    --chart-3: 262 83% 50%;
+    --chart-4: 45 93% 42%;
+    --chart-5: 0 72% 45%;
+    --chart-6: 32 95% 40%;
+
+    /* Light mode shadows */
+    --shadow-profit: 0 4px 20px -4px hsl(142 71% 45% / 0.25);
+    --shadow-loss: 0 4px 20px -4px hsl(0 72% 51% / 0.25);
+    --shadow-card: 0 4px 24px -4px hsl(222 47% 11% / 0.08);
+    --shadow-glow: 0 0 30px -8px hsl(190 95% 45% / 0.2);
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 190 95% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 190 95% 40%;
+  }
+
   .dark {
     --background: 222 47% 6%;
     --foreground: 210 40% 96%;

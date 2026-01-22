@@ -22,6 +22,7 @@ import { ETFTable } from './asset-tables/ETFTable';
 import { USStockTable } from './asset-tables/USStockTable';
 import { SGBTable } from './asset-tables/SGBTable';
 import { BondTable } from './asset-tables/BondTable';
+import { RetirementTable } from './asset-tables/RetirementTable';
 import { formatCurrency, formatPercent } from '@/lib/portfolioUtils';
 import { cn } from '@/lib/utils';
 import { useExchangeRate } from '@/hooks/useExchangeRate';
@@ -48,10 +49,12 @@ const ASSET_CONFIG: Record<string, {
   'NPS': { label: 'NPS', icon: Shield },
   'EPF': { label: 'EPF', icon: Briefcase },
   'PPF': { label: 'PPF', icon: Wallet },
+  'FD': { label: 'Fixed Deposits', icon: Building2 },
+  'RD': { label: 'Recurring Deposits', icon: PiggyBank },
 };
 
-// Order of tabs
-const TAB_ORDER = ['Equity', 'Mutual Fund', 'ETF', 'US Stock', 'SGB', 'Bond', 'REIT', 'Commodity', 'Index', 'NPS', 'EPF', 'PPF'];
+// Order of tabs - including retirement assets
+const TAB_ORDER = ['Equity', 'Mutual Fund', 'ETF', 'US Stock', 'SGB', 'Bond', 'REIT', 'Commodity', 'Index', 'NPS', 'EPF', 'PPF', 'FD', 'RD'];
 
 export function TabbedHoldings({ holdings }: TabbedHoldingsProps) {
   const [activeTab, setActiveTab] = useState<string>('all');
@@ -169,6 +172,12 @@ export function TabbedHoldings({ holdings }: TabbedHoldingsProps) {
         return <SGBTable holdings={data} />;
       case 'Bond':
         return <BondTable holdings={data} />;
+      case 'EPF':
+      case 'PPF':
+      case 'NPS':
+      case 'FD':
+      case 'RD':
+        return <RetirementTable holdings={data} assetType={assetType as 'EPF' | 'PPF' | 'NPS' | 'FD' | 'RD'} />;
       default:
         return <AssetClassTable holdings={data} assetType={assetType} />;
     }
