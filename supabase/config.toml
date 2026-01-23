@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.kite-login-url]
 verify_jwt = false
 
+[functions.kite-disconnect]
+verify_jwt = false
+
 [functions.capture-snapshot]
 verify_jwt = false
 
@@ -16,4 +19,16 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.scheduled-snapshot]
+verify_jwt = false
+
+[functions.portfolio-assistant]
+verify_jwt = false
+
+[functions.portfolio-analysis]
+verify_jwt = false
+
+[functions.smart-search]
+verify_jwt = false
+
+[functions.exchange-rates]
 verify_jwt = false
