@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ExternalLink, CheckCircle2, AlertCircle, RefreshCw, Info, CloudDownload, LogOut, Clock, Shield, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
     isSessionValid,
     loginUrl,
     loginUrlError,
+    fetchLoginUrl,
     disconnectSession,
     isDisconnecting,
     sessionExpiresIn,
@@ -49,6 +50,13 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
   const [showSetup, setShowSetup] = useState(false);
   const [isAuthRedirecting, setIsAuthRedirecting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Fetch login URL when component mounts and user is not connected
+  useEffect(() => {
+    if (!isLoading && !isSessionValid && !loginUrl && !loginUrlError) {
+      fetchLoginUrl();
+    }
+  }, [isLoading, isSessionValid, loginUrl, loginUrlError, fetchLoginUrl]);
 
   const handleLogin = () => {
     if (loginUrl) {

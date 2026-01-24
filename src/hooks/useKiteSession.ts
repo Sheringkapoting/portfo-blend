@@ -19,6 +19,7 @@ interface UseKiteSessionReturn {
   loginUrl: string | null;
   loginUrlError: string | null;
   refetch: () => Promise<KiteSession | null>;
+  fetchLoginUrl: () => Promise<void>;
   disconnectSession: () => Promise<boolean>;
   isDisconnecting: boolean;
   sessionExpiresIn: string | null;
@@ -84,7 +85,21 @@ export function useKiteSession(): UseKiteSessionReturn {
 
   const fetchLoginUrl = useCallback(async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('kite-login-url');
+      // Get the current session to ensure we have a valid JWT
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.error('No active session found');
+        setLoginUrlError('Please log in to connect Zerodha.');
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('kite-login-url', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+      
       if (error) {
         console.error('Error fetching login URL:', error);
         setLoginUrlError('Failed to get login URL. Check API key configuration.');
@@ -105,7 +120,22 @@ export function useKiteSession(): UseKiteSessionReturn {
   const disconnectSession = useCallback(async (): Promise<boolean> => {
     setIsDisconnecting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('kite-disconnect');
+      // Get the current session to ensure we have a valid JWT
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.error('No active session found');
+        toast.error('Authentication required', {
+          description: 'Please log in to disconnect Zerodha.',
+        });
+        return false;
+      }
+
+      const { data, error } = await supabase.functions.invoke('kite-disconnect', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
       
       if (error) {
         throw new Error(error.message);
@@ -133,8 +163,9 @@ export function useKiteSession(): UseKiteSessionReturn {
 
   useEffect(() => {
     fetchSession();
-    fetchLoginUrl();
-  }, [fetchSession, fetchLoginUrl]);
+    // Don't fetch login URL on mount - it will be fetched when needed
+    // This prevents 401 errors when user is not yet authenticated
+  }, [fetchSession]);
 
   // Calculate time until session expires
   const sessionExpiresIn = session?.expires_at
@@ -164,6 +195,7 @@ export function useKiteSession(): UseKiteSessionReturn {
     loginUrl,
     loginUrlError,
     refetch: fetchSession,
+    fetchLoginUrl,
     disconnectSession,
     isDisconnecting,
     sessionExpiresIn,
