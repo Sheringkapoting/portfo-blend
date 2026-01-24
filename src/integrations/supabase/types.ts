@@ -47,7 +47,6 @@ export type Database = {
       holdings: {
         Row: {
           avg_price: number
-          broker: string | null
           created_at: string
           exchange: string
           id: string
@@ -65,7 +64,6 @@ export type Database = {
         }
         Insert: {
           avg_price: number
-          broker?: string | null
           created_at?: string
           exchange: string
           id?: string
@@ -83,7 +81,6 @@ export type Database = {
         }
         Update: {
           avg_price?: number
-          broker?: string | null
           created_at?: string
           exchange?: string
           id?: string
@@ -127,179 +124,6 @@ export type Database = {
           id?: string
           token_type?: string | null
           updated_at?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      portfolio_snapshots: {
-        Row: {
-          created_at: string
-          current_value: number
-          holdings_count: number
-          id: string
-          pnl_percent: number
-          snapshot_date: string
-          total_investment: number
-          total_pnl: number
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          current_value?: number
-          holdings_count?: number
-          id?: string
-          pnl_percent?: number
-          snapshot_date?: string
-          total_investment?: number
-          total_pnl?: number
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          current_value?: number
-          holdings_count?: number
-          id?: string
-          pnl_percent?: number
-          snapshot_date?: string
-          total_investment?: number
-          total_pnl?: number
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      profiles: {
-        Row: {
-          created_at: string
-          display_name: string | null
-          email: string | null
-          id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          display_name?: string | null
-          email?: string | null
-          id?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          display_name?: string | null
-          email?: string | null
-          id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      quotes_cache: {
-        Row: {
-          change_percent: number | null
-          fetched_at: string
-          id: string
-          ltp: number
-          source: string
-          symbol: string
-          volume: number | null
-        }
-        Insert: {
-          change_percent?: number | null
-          fetched_at?: string
-          id?: string
-          ltp: number
-          source: string
-          symbol: string
-          volume?: number | null
-        }
-        Update: {
-          change_percent?: number | null
-          fetched_at?: string
-          id?: string
-          ltp?: number
-          source?: string
-          symbol?: string
-          volume?: number | null
-        }
-        Relationships: []
-      }
-      snapshot_source_details: {
-        Row: {
-          asset_type: string | null
-          created_at: string | null
-          current_value: number | null
-          holdings_count: number | null
-          id: string
-          last_sync_at: string | null
-          snapshot_id: string | null
-          source: string
-          total_investment: number | null
-          total_pnl: number | null
-          user_id: string | null
-        }
-        Insert: {
-          asset_type?: string | null
-          created_at?: string | null
-          current_value?: number | null
-          holdings_count?: number | null
-          id?: string
-          last_sync_at?: string | null
-          snapshot_id?: string | null
-          source: string
-          total_investment?: number | null
-          total_pnl?: number | null
-          user_id?: string | null
-        }
-        Update: {
-          asset_type?: string | null
-          created_at?: string | null
-          current_value?: number | null
-          holdings_count?: number | null
-          id?: string
-          last_sync_at?: string | null
-          snapshot_id?: string | null
-          source?: string
-          total_investment?: number | null
-          total_pnl?: number | null
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "snapshot_source_details_snapshot_id_fkey"
-            columns: ["snapshot_id"]
-            isOneToOne: false
-            referencedRelation: "portfolio_snapshots"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sync_logs: {
-        Row: {
-          created_at: string
-          error_message: string | null
-          holdings_count: number | null
-          id: string
-          source: string
-          status: string
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          error_message?: string | null
-          holdings_count?: number | null
-          id?: string
-          source: string
-          status: string
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          error_message?: string | null
-          holdings_count?: number | null
-          id?: string
-          source?: string
-          status?: string
           user_id?: string | null
         }
         Relationships: []
@@ -634,6 +458,179 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      portfolio_snapshots: {
+        Row: {
+          created_at: string
+          current_value: number
+          holdings_count: number
+          id: string
+          pnl_percent: number
+          snapshot_date: string
+          total_investment: number
+          total_pnl: number
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          current_value?: number
+          holdings_count?: number
+          id?: string
+          pnl_percent?: number
+          snapshot_date?: string
+          total_investment?: number
+          total_pnl?: number
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          current_value?: number
+          holdings_count?: number
+          id?: string
+          pnl_percent?: number
+          snapshot_date?: string
+          total_investment?: number
+          total_pnl?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      quotes_cache: {
+        Row: {
+          change_percent: number | null
+          fetched_at: string
+          id: string
+          ltp: number
+          source: string
+          symbol: string
+          volume: number | null
+        }
+        Insert: {
+          change_percent?: number | null
+          fetched_at?: string
+          id?: string
+          ltp: number
+          source: string
+          symbol: string
+          volume?: number | null
+        }
+        Update: {
+          change_percent?: number | null
+          fetched_at?: string
+          id?: string
+          ltp?: number
+          source?: string
+          symbol?: string
+          volume?: number | null
+        }
+        Relationships: []
+      }
+      snapshot_source_details: {
+        Row: {
+          asset_type: string | null
+          created_at: string | null
+          current_value: number | null
+          holdings_count: number | null
+          id: string
+          last_sync_at: string | null
+          snapshot_id: string | null
+          source: string
+          total_investment: number | null
+          total_pnl: number | null
+          user_id: string | null
+        }
+        Insert: {
+          asset_type?: string | null
+          created_at?: string | null
+          current_value?: number | null
+          holdings_count?: number | null
+          id?: string
+          last_sync_at?: string | null
+          snapshot_id?: string | null
+          source: string
+          total_investment?: number | null
+          total_pnl?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          asset_type?: string | null
+          created_at?: string | null
+          current_value?: number | null
+          holdings_count?: number | null
+          id?: string
+          last_sync_at?: string | null
+          snapshot_id?: string | null
+          source?: string
+          total_investment?: number | null
+          total_pnl?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "snapshot_source_details_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_logs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          holdings_count: number | null
+          id: string
+          source: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          holdings_count?: number | null
+          id?: string
+          source: string
+          status: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          holdings_count?: number | null
+          id?: string
+          source?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {
