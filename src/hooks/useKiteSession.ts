@@ -86,11 +86,12 @@ export function useKiteSession(): UseKiteSessionReturn {
   const fetchLoginUrl = useCallback(async () => {
     try {
       // Get the current session to ensure we have a valid JWT
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      if (!session) {
-        console.error('No active session found');
-        setLoginUrlError('Please log in to connect Zerodha.');
+      if (sessionError || !session) {
+        console.log('[useKiteSession] No active session, skipping login URL fetch');
+        // Don't set error here - just silently skip if not authenticated
+        // The user will need to log in first before connecting Zerodha
         return;
       }
 
@@ -163,8 +164,8 @@ export function useKiteSession(): UseKiteSessionReturn {
 
   useEffect(() => {
     fetchSession();
-    // Don't fetch login URL on mount - it will be fetched when needed
-    // This prevents 401 errors when user is not yet authenticated
+    // Don't fetch login URL on mount to avoid 401 errors
+    // It will be fetched when the user is authenticated and tries to connect
   }, [fetchSession]);
 
   // Calculate time until session expires

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { useKiteSession } from '@/hooks/useKiteSession';
+import { supabase } from '@/integrations/supabase/client';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,11 +52,21 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
   const [isAuthRedirecting, setIsAuthRedirecting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch login URL when component mounts and user is not connected
+  // Only fetch login URL when user is authenticated and tries to connect
+  // This prevents 401 errors when users aren't logged in yet
   useEffect(() => {
-    if (!isLoading && !isSessionValid && !loginUrl && !loginUrlError) {
-      fetchLoginUrl();
-    }
+    // Check if we have an authenticated session before fetching login URL
+    const checkAuthAndFetchUrl = async () => {
+      if (!isLoading && !isSessionValid && !loginUrl && !loginUrlError) {
+        // Verify user is authenticated before fetching
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          fetchLoginUrl();
+        }
+      }
+    };
+    
+    checkAuthAndFetchUrl();
   }, [isLoading, isSessionValid, loginUrl, loginUrlError, fetchLoginUrl]);
 
   const handleLogin = () => {
