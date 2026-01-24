@@ -51,25 +51,28 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
   const [showSetup, setShowSetup] = useState(false);
   const [isAuthRedirecting, setIsAuthRedirecting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isFetchingLoginUrl, setIsFetchingLoginUrl] = useState(false);
 
-  // Only fetch login URL when user is authenticated and tries to connect
-  // This prevents 401 errors when users aren't logged in yet
-  useEffect(() => {
-    // Check if we have an authenticated session before fetching login URL
-    const checkAuthAndFetchUrl = async () => {
-      if (!isLoading && !isSessionValid && !loginUrl && !loginUrlError) {
-        // Verify user is authenticated before fetching
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          fetchLoginUrl();
-        }
+  // DO NOT fetch login URL automatically on mount
+  // Only fetch when user explicitly clicks the Connect button
+  // This prevents 401 JWT errors
+
+  const handleLogin = async () => {
+    // If we don't have a login URL yet, fetch it first
+    if (!loginUrl && !isFetchingLoginUrl) {
+      setIsFetchingLoginUrl(true);
+      try {
+        await fetchLoginUrl();
+        // The loginUrl state will be updated by the hook
+        // We'll need to wait for the next render to use it
+      } catch (error) {
+        console.error('[KiteConnect] Failed to fetch login URL:', error);
+      } finally {
+        setIsFetchingLoginUrl(false);
       }
-    };
-    
-    checkAuthAndFetchUrl();
-  }, [isLoading, isSessionValid, loginUrl, loginUrlError, fetchLoginUrl]);
+      return;
+    }
 
-  const handleLogin = () => {
     if (loginUrl) {
       setIsAuthRedirecting(true);
       
@@ -283,28 +286,27 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
                 <span>Session expired • was valid for {sessionExpiresIn}</span>
               </div>
             )}
-            
+
             <div className="flex gap-2">
               <Button
                 onClick={handleLogin}
-                disabled={!loginUrl || isAuthRedirecting}
+                disabled={isAuthRedirecting || isFetchingLoginUrl}
                 className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
               >
-                {isAuthRedirecting ? (
+                {(isAuthRedirecting || isFetchingLoginUrl) ? (
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <ExternalLink className="h-4 w-4 mr-2" />
                 )}
-                {loginUrl ? (isAuthRedirecting ? 'Redirecting...' : 'Connect Zerodha') : 'Loading...'}
+                {isFetchingLoginUrl ? 'Loading...' : (isAuthRedirecting ? 'Redirecting...' : 'Connect Zerodha')}
               </Button>
               
-              {/* Refresh Session Button - also available when not connected */}
               <Button
                 variant="outline"
                 size="icon"
                 onClick={handleRefreshSession}
                 disabled={isRefreshing}
-                title="Check for active session"
+                title="Refresh session status"
                 className="shrink-0"
               >
                 {isRefreshing ? (
