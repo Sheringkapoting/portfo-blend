@@ -80,6 +80,9 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
         // We'll need to wait for the next render to use it
       } catch (error) {
         console.error('[KiteConnect] Failed to fetch login URL:', error);
+        toast.error('Configuration Error', {
+          description: 'Zerodha integration is not properly configured. Please contact support.',
+        });
       } finally {
         setIsFetchingLoginUrl(false);
       }

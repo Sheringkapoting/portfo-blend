@@ -107,28 +107,41 @@ export function useKiteSession(): UseKiteSessionReturn {
 
       console.log('[useKiteSession] Session refreshed successfully. Fetching login URL for user:', user.id);
 
-      const { data, error } = await supabase.functions.invoke('kite-login-url', {
+      const response = await supabase.functions.invoke('kite-login-url', {
         headers: {
           Authorization: `Bearer ${session.access_token}`
         }
       });
       
-      if (error) {
-        console.error('[useKiteSession] Error fetching login URL:', error);
+      console.log('[useKiteSession] Edge Function response:', response);
+      
+      if (response.error) {
+        console.error('[useKiteSession] Error fetching login URL:', response.error);
+        
         // Check if it's an authentication error
-        if (error.message?.includes('401') || error.message?.includes('JWT')) {
+        if (response.error.message?.includes('401') || response.error.message?.includes('JWT')) {
+          console.error('[useKiteSession] Authentication failed with token:', session.access_token.substring(0, 20) + '...');
           setLoginUrlError('Authentication failed. Please log out and log in again.');
+        } else if (response.error.message?.includes('FunctionsHttpError')) {
+          // Edge Function returned an error response
+          console.error('[useKiteSession] Edge Function error:', response.error.message);
+          setLoginUrlError('Failed to get login URL. Check API key configuration.');
         } else {
           setLoginUrlError('Failed to get login URL. Check API key configuration.');
         }
         return;
       }
-      if (data?.loginUrl) {
-        setLoginUrl(data.loginUrl);
+      
+      if (response.data?.loginUrl) {
+        setLoginUrl(response.data.loginUrl);
         setLoginUrlError(null);
         console.log('[useKiteSession] Login URL fetched successfully');
-      } else if (data?.error) {
-        setLoginUrlError(data.error);
+      } else if (response.data?.error) {
+        console.error('[useKiteSession] Edge Function returned error:', response.data.error);
+        setLoginUrlError(response.data.error);
+      } else {
+        console.error('[useKiteSession] Unexpected response format:', response.data);
+        setLoginUrlError('Unexpected response from server.');
       }
     } catch (e: any) {
       console.error('[useKiteSession] Exception fetching login URL:', e);

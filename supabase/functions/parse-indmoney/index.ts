@@ -337,6 +337,7 @@ function findHoldingsSheet(sheetNames: string[]): string | null {
 
 /**
  * Find the header row and create column mapping
+ * Enhanced to handle various Excel formats and column name variations
  */
 function findHeaderRowAndColumns(data: any[][]): { headerRow: number; columnMap: ColumnMap } {
   const defaultMap: ColumnMap = {
@@ -347,45 +348,73 @@ function findHeaderRowAndColumns(data: any[][]): { headerRow: number; columnMap:
     totalGainLoss: -1, totalGainLossPercent: -1, xirr: -1
   }
 
-  // Look for header row (typically contains "Asset Type" or "Investment")
+  // Look for header row - check first 20 rows
   for (let i = 0; i < Math.min(data.length, 20); i++) {
     const row = data[i]
     if (!row || row.length === 0) continue
 
     const rowStr = row.map(c => String(c).toLowerCase()).join(' ')
     
-    // Check if this looks like a header row
-    if (rowStr.includes('asset type') || rowStr.includes('investment') && rowStr.includes('units')) {
+    // More flexible header detection - look for key indicators
+    const hasAssetType = rowStr.includes('asset') && rowStr.includes('type')
+    const hasInvestment = rowStr.includes('investment') || rowStr.includes('stock') || rowStr.includes('fund')
+    const hasUnits = rowStr.includes('units') || rowStr.includes('quantity')
+    const hasAmount = rowStr.includes('amount') || rowStr.includes('value')
+    
+    // This looks like a header row if it has at least 2 key indicators
+    const indicatorCount = [hasAssetType, hasInvestment, hasUnits, hasAmount].filter(Boolean).length
+    
+    if (indicatorCount >= 2) {
       const columnMap = { ...defaultMap }
       
       row.forEach((cell, idx) => {
         const cellStr = String(cell).toLowerCase().trim()
         
-        if (cellStr === 'first name') columnMap.firstName = idx
-        else if (cellStr === 'asset type') columnMap.assetType = idx
-        else if (cellStr === 'asset class') columnMap.assetClass = idx
-        else if (cellStr === 'category') columnMap.category = idx
-        else if (cellStr === 'investment_code' || cellStr === 'investment code') columnMap.investmentCode = idx
-        else if (cellStr === 'investment') columnMap.investment = idx
-        else if (cellStr === 'amc name') columnMap.amcName = idx
-        else if (cellStr === 'mf direct/regular') columnMap.mfType = idx
-        else if (cellStr === 'expense ratio') columnMap.expenseRatio = idx
-        else if (cellStr === 'broker_code' || cellStr === 'broker code') columnMap.brokerCode = idx
-        else if (cellStr === 'broker') columnMap.broker = idx
-        else if (cellStr === 'investment date') columnMap.investmentDate = idx
-        else if (cellStr === 'total units') columnMap.totalUnits = idx
-        else if (cellStr === 'invested amount') columnMap.investedAmount = idx
-        else if (cellStr === 'market value') columnMap.marketValue = idx
+        // More flexible matching with variations
+        if (cellStr.includes('first') && cellStr.includes('name')) columnMap.firstName = idx
+        else if (cellStr.includes('asset') && cellStr.includes('type')) columnMap.assetType = idx
+        else if (cellStr.includes('asset') && cellStr.includes('class')) columnMap.assetClass = idx
+        else if (cellStr === 'category' || cellStr.includes('categor')) columnMap.category = idx
+        else if (cellStr.includes('investment') && cellStr.includes('code')) columnMap.investmentCode = idx
+        else if (cellStr === 'isin' || cellStr.includes('isin')) columnMap.investmentCode = idx
+        else if (cellStr === 'investment' || cellStr === 'stock name' || cellStr === 'fund name' || cellStr === 'name') {
+          if (columnMap.investment === -1) columnMap.investment = idx
+        }
+        else if (cellStr.includes('amc')) columnMap.amcName = idx
+        else if (cellStr.includes('direct') || cellStr.includes('regular')) columnMap.mfType = idx
+        else if (cellStr.includes('expense') && cellStr.includes('ratio')) columnMap.expenseRatio = idx
+        else if (cellStr.includes('broker') && cellStr.includes('code')) columnMap.brokerCode = idx
+        else if (cellStr === 'broker' || cellStr.includes('broker')) columnMap.broker = idx
+        else if (cellStr.includes('investment') && cellStr.includes('date')) columnMap.investmentDate = idx
+        else if (cellStr.includes('date') && !cellStr.includes('investment')) columnMap.investmentDate = idx
+        else if (cellStr.includes('total') && cellStr.includes('units')) columnMap.totalUnits = idx
+        else if (cellStr === 'units' || cellStr === 'quantity' || cellStr === 'qty') columnMap.totalUnits = idx
+        else if (cellStr.includes('invested') && cellStr.includes('amount')) columnMap.investedAmount = idx
+        else if (cellStr.includes('cost') || cellStr.includes('purchase')) columnMap.investedAmount = idx
+        else if (cellStr.includes('market') && cellStr.includes('value')) columnMap.marketValue = idx
+        else if (cellStr.includes('current') && cellStr.includes('value')) columnMap.marketValue = idx
         else if (cellStr.includes('holding') && cellStr.includes('%')) columnMap.holdingPercent = idx
-        else if (cellStr.includes('gain') && cellStr.includes('inr')) columnMap.totalGainLoss = idx
+        else if (cellStr.includes('gain') && (cellStr.includes('inr') || cellStr.includes('₹'))) columnMap.totalGainLoss = idx
+        else if (cellStr.includes('p&l') || cellStr.includes('pnl')) columnMap.totalGainLoss = idx
         else if (cellStr.includes('gain') && cellStr.includes('%')) columnMap.totalGainLossPercent = idx
+        else if (cellStr.includes('return') && cellStr.includes('%')) columnMap.totalGainLossPercent = idx
         else if (cellStr.includes('xirr')) columnMap.xirr = idx
+      })
+
+      console.log(`Found header row at ${i + 1} with columns:`, {
+        assetType: columnMap.assetType >= 0,
+        investment: columnMap.investment >= 0,
+        totalUnits: columnMap.totalUnits >= 0,
+        investedAmount: columnMap.investedAmount >= 0,
+        marketValue: columnMap.marketValue >= 0,
+        broker: columnMap.broker >= 0
       })
 
       return { headerRow: i, columnMap }
     }
   }
 
+  console.error('Could not find header row. First 5 rows:', data.slice(0, 5))
   return { headerRow: -1, columnMap: defaultMap }
 }
 
