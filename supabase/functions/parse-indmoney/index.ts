@@ -465,8 +465,14 @@ function parseHoldings(
         continue
       }
 
-      // Validate Broker for each record
-      if (!broker || broker.toLowerCase() === 'n/a' || broker === '-') {
+      // For retirement assets (EPF, PPF, NPS), broker can be empty - use asset type as broker
+      const isRetirementAsset = ['EPF', 'PPF', 'NPS'].includes(assetType)
+      const effectiveBroker = broker && broker.toLowerCase() !== 'n/a' && broker !== '-' 
+        ? broker 
+        : (isRetirementAsset ? assetType : '')
+
+      // Validate Broker for non-retirement assets
+      if (!effectiveBroker && !isRetirementAsset) {
         skipped.push({
           row: i + 1,
           reason: 'Missing or invalid broker information',
@@ -522,7 +528,7 @@ function parseHoldings(
         isin,
         user_id: userId,
         xirr: xirrValue !== null && isFinite(xirrValue) ? Math.round(xirrValue * 100) / 100 : undefined,
-        broker: broker,
+        broker: effectiveBroker || assetType, // Use asset type as fallback for retirement assets
       }
 
       // Validate the holding
@@ -672,7 +678,9 @@ function validateHolding(holding: ParsedHolding): ValidationResult {
     errors.push('Invalid name')
   }
 
-  if (!holding.broker || holding.broker.length < 2) {
+  // Allow short broker names for retirement assets (EPF, PPF, NPS use asset type as broker)
+  const isRetirementType = ['EPF', 'PPF', 'NPS'].includes(holding.type)
+  if (!holding.broker && !isRetirementType) {
     errors.push('Invalid or missing broker')
   }
 
