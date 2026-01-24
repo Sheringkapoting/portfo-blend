@@ -94,16 +94,18 @@ export function useKiteSession(): UseKiteSessionReturn {
         return;
       }
 
-      // Get the current session to ensure we have a valid JWT
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      // Refresh the session to get a fresh JWT token
+      // This ensures the token is valid and not expired
+      console.log('[useKiteSession] Refreshing session to get fresh JWT token...');
+      const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
       
-      if (sessionError || !session || !session.access_token) {
-        console.log('[useKiteSession] No valid session found, skipping login URL fetch');
-        setLoginUrlError('Session expired. Please log in again.');
+      if (refreshError || !session || !session.access_token) {
+        console.error('[useKiteSession] Failed to refresh session:', refreshError);
+        setLoginUrlError('Session expired. Please log out and log in again.');
         return;
       }
 
-      console.log('[useKiteSession] Fetching login URL with valid session for user:', user.id);
+      console.log('[useKiteSession] Session refreshed successfully. Fetching login URL for user:', user.id);
 
       const { data, error } = await supabase.functions.invoke('kite-login-url', {
         headers: {
