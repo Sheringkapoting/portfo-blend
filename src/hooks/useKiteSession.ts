@@ -85,15 +85,25 @@ export function useKiteSession(): UseKiteSessionReturn {
 
   const fetchLoginUrl = useCallback(async () => {
     try {
+      // First, verify the user is authenticated
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.log('[useKiteSession] User not authenticated, cannot fetch login URL');
+        setLoginUrlError('Please log in to your account first.');
+        return;
+      }
+
       // Get the current session to ensure we have a valid JWT
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      if (sessionError || !session) {
-        console.log('[useKiteSession] No active session, skipping login URL fetch');
-        // Don't set error here - just silently skip if not authenticated
-        // The user will need to log in first before connecting Zerodha
+      if (sessionError || !session || !session.access_token) {
+        console.log('[useKiteSession] No valid session found, skipping login URL fetch');
+        setLoginUrlError('Session expired. Please log in again.');
         return;
       }
+
+      console.log('[useKiteSession] Fetching login URL with valid session for user:', user.id);
 
       const { data, error } = await supabase.functions.invoke('kite-login-url', {
         headers: {
@@ -102,19 +112,29 @@ export function useKiteSession(): UseKiteSessionReturn {
       });
       
       if (error) {
-        console.error('Error fetching login URL:', error);
-        setLoginUrlError('Failed to get login URL. Check API key configuration.');
+        console.error('[useKiteSession] Error fetching login URL:', error);
+        // Check if it's an authentication error
+        if (error.message?.includes('401') || error.message?.includes('JWT')) {
+          setLoginUrlError('Authentication failed. Please log out and log in again.');
+        } else {
+          setLoginUrlError('Failed to get login URL. Check API key configuration.');
+        }
         return;
       }
       if (data?.loginUrl) {
         setLoginUrl(data.loginUrl);
         setLoginUrlError(null);
+        console.log('[useKiteSession] Login URL fetched successfully');
       } else if (data?.error) {
         setLoginUrlError(data.error);
       }
-    } catch (e) {
-      console.error('Error fetching login URL:', e);
-      setLoginUrlError('Failed to connect to server.');
+    } catch (e: any) {
+      console.error('[useKiteSession] Exception fetching login URL:', e);
+      if (e.message?.includes('401') || e.message?.includes('JWT')) {
+        setLoginUrlError('Authentication failed. Please log out and log in again.');
+      } else {
+        setLoginUrlError('Failed to connect to server.');
+      }
     }
   }, []);
 
