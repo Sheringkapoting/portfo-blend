@@ -137,14 +137,33 @@ export function usePortfolioData() {
   const uploadINDMoneyExcel = useCallback(async (file: File): Promise<{ success: boolean; holdings_count?: number; error?: string }> => {
     setIsSyncing(true);
     try {
+      // Get the current session to include the auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error('You must be logged in to upload files');
+      }
+
       const formData = new FormData();
       formData.append('file', file);
 
-      const { data, error } = await supabase.functions.invoke('parse-indmoney', {
-        body: formData,
-      });
+      // Use fetch directly to have full control over headers with FormData
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-indmoney`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
       
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error: ${response.status}`);
+      }
       
       if (data.success) {
         toast.success(data.message);
