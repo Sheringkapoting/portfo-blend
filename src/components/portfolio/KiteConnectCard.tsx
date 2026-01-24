@@ -6,8 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
+import { toast } from 'sonner';
 import { useKiteSession } from '@/hooks/useKiteSession';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +37,8 @@ interface KiteConnectCardProps {
 }
 
 export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncProgress }: KiteConnectCardProps) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const {
     session,
     isLoading,
@@ -58,6 +62,15 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
   // This prevents 401 JWT errors
 
   const handleLogin = async () => {
+    // Check if user is authenticated first
+    if (!user) {
+      toast.error('Authentication Required', {
+        description: 'Please log in to your account before connecting Zerodha.',
+      });
+      navigate('/auth');
+      return;
+    }
+
     // If we don't have a login URL yet, fetch it first
     if (!loginUrl && !isFetchingLoginUrl) {
       setIsFetchingLoginUrl(true);
@@ -262,7 +275,15 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
           </>
         ) : (
           <>
-            {loginUrlError ? (
+            {!user ? (
+              <Alert className="border-blue-500/20 bg-blue-500/5">
+                <AlertCircle className="h-4 w-4 text-blue-500" />
+                <AlertTitle className="text-sm">Login Required</AlertTitle>
+                <AlertDescription className="text-xs text-muted-foreground">
+                  Please log in to your account first to connect Zerodha and sync your portfolio.
+                </AlertDescription>
+              </Alert>
+            ) : loginUrlError ? (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle className="text-sm">Configuration Error</AlertTitle>
@@ -290,15 +311,16 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
             <div className="flex gap-2">
               <Button
                 onClick={handleLogin}
-                disabled={isAuthRedirecting || isFetchingLoginUrl}
+                disabled={!user || isAuthRedirecting || isFetchingLoginUrl}
                 className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
+                title={!user ? 'Please log in first' : ''}
               >
                 {(isAuthRedirecting || isFetchingLoginUrl) ? (
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <ExternalLink className="h-4 w-4 mr-2" />
                 )}
-                {isFetchingLoginUrl ? 'Loading...' : (isAuthRedirecting ? 'Redirecting...' : 'Connect Zerodha')}
+                {!user ? 'Log In to Connect' : (isFetchingLoginUrl ? 'Loading...' : (isAuthRedirecting ? 'Redirecting...' : 'Connect Zerodha'))}
               </Button>
               
               <Button
