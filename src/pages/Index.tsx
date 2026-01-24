@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, LayoutGrid, MessageSquare } from 'lucide-react';
+import { Wallet, TrendingUp, PiggyBank, BarChart3, Briefcase, Database, LineChart, LayoutGrid, MessageSquare, Building2 } from 'lucide-react';
 import { DashboardHeader } from '@/components/portfolio/DashboardHeader';
 import { StatCard } from '@/components/portfolio/StatCard';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
@@ -12,6 +12,7 @@ import { CacheStatusBadge } from '@/components/portfolio/CacheStatusBadge';
 import { KiteLoginModal } from '@/components/portfolio/KiteLoginModal';
 import { AIAssistantPanel } from '@/components/portfolio/AIAssistantPanel';
 import { AIInsightsCard } from '@/components/portfolio/AIInsightsCard';
+import { MFDashboard } from '@/components/mutualfund/MFDashboard';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
 import { usePortfolioCache } from '@/hooks/usePortfolioCache';
 import { useKiteSession } from '@/hooks/useKiteSession';
@@ -238,6 +239,10 @@ const Index = () => {
               <BarChart3 className="h-4 w-4" />
               Allocation
             </TabsTrigger>
+            <TabsTrigger value="mutualfunds" className="gap-2 data-[state=active]:bg-card">
+              <Building2 className="h-4 w-4" />
+              Mutual Funds
+            </TabsTrigger>
             <TabsTrigger value="analytics" className="gap-2 data-[state=active]:bg-card">
               <LineChart className="h-4 w-4" />
               Analytics
@@ -340,6 +345,10 @@ const Index = () => {
                 </>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="mutualfunds" className="mt-6">
+            <MFDashboard />
           </TabsContent>
 
           <TabsContent value="analytics" className="mt-6">
