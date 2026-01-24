@@ -19,9 +19,7 @@ import { useKiteSession } from '@/hooks/useKiteSession';
 import { useKiteOAuthHandler } from '@/hooks/useKiteOAuthHandler';
 import { useSyncHealth } from '@/hooks/useSyncHealth';
 import { useAutoRefresh } from '@/hooks/useAutoRefresh';
-import { sampleHoldings } from '@/data/sampleHoldings';
 import { 
-  enrichHolding, 
   calculatePortfolioSummary,
   calculateSectorAllocation,
   calculateTypeAllocation,
@@ -115,12 +113,9 @@ const Index = () => {
     }
   }, [isSessionValid]);
 
-  // Use live holdings if available, otherwise fall back to sample data
+  // Use live holdings
   const enrichedHoldings = useMemo(() => {
-    if (liveHoldings.length > 0) {
-      return liveHoldings;
-    }
-    return sampleHoldings.map(enrichHolding);
+    return liveHoldings;
   }, [liveHoldings]);
 
   const isLive = liveHoldings.length > 0;

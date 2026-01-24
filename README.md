@@ -1,73 +1,77 @@
-# Welcome to your Lovable project
+# Portfolio Blend - Investment Portfolio Tracker
 
-## Project info
+A comprehensive portfolio tracking application that consolidates investments from multiple sources including Zerodha, INDMoney, and Mutual Funds.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- **Multi-Source Integration**: Connect Zerodha via OAuth, upload INDMoney Excel reports, and sync Mutual Funds via PAN
+- **Real-time Portfolio Analytics**: Track total invested value, current value, P&L, and returns
+- **Asset Class Breakdown**: View holdings by Equity, ETF, Mutual Funds, US Stocks, REIT, and SGB
+- **Sector & Source Allocation**: Visualize portfolio distribution across sectors and data sources
+- **AI-Powered Insights**: Get intelligent portfolio recommendations and analysis
+- **Portfolio Snapshots**: Capture and compare portfolio performance over time
+- **Auto-refresh**: Keep your portfolio data up-to-date automatically
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Frontend**: React 18, TypeScript, Vite
+- **UI Components**: shadcn-ui, Tailwind CSS, Radix UI
+- **Backend**: Supabase (PostgreSQL, Edge Functions, Authentication)
+- **State Management**: TanStack Query (React Query)
+- **Charts**: Recharts
+- **Animations**: Framer Motion
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 18+ and npm installed ([install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
+- Supabase account and project
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### Installation
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
+# Clone the repository
 git clone <YOUR_GIT_URL>
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Navigate to the project directory
+cd portfo-blend
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Set up environment variables
+# Create a .env file with your Supabase credentials:
+# VITE_SUPABASE_URL=your_supabase_url
+# VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Start the development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Database Setup
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+1. Run the migrations in the `supabase/migrations` directory
+2. Deploy Edge Functions from `supabase/functions`
+3. Configure Zerodha API credentials in Supabase secrets
 
-**Use GitHub Codespaces**
+## Usage
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+1. **Sign up/Login**: Create an account or log in
+2. **Connect Data Sources**:
+   - Connect Zerodha via OAuth for automatic sync
+   - Upload INDMoney Excel reports
+   - Sync Mutual Funds using your PAN number
+3. **View Portfolio**: Analyze your consolidated portfolio across all sources
+4. **Capture Snapshots**: Save portfolio states for historical comparison
+5. **Get AI Insights**: Receive personalized portfolio recommendations
 
-## What technologies are used for this project?
+## Deployment
 
-This project is built with:
+Deploy to Vercel, Netlify, or any static hosting platform:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```sh
+npm run build
+```
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+The build output will be in the `dist` directory.
