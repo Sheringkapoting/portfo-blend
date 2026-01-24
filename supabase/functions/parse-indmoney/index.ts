@@ -172,9 +172,9 @@ Deno.serve(async (req) => {
       throw new Error('Could not find header row in the file. Expected columns like Asset Type, Investment, Total Units, etc.')
     }
 
-    // Validate Broker column existence
+    // Validate Broker column existence (optional for now)
     if (columnMap.broker === -1) {
-      throw new Error('Required "Broker" column not found in the file. Please ensure the Excel template includes a "Broker" column.')
+      console.warn('Broker column not found, will use asset type as broker for retirement assets')
     }
 
     console.log(`Header found at row ${headerRow + 1}`)
@@ -498,13 +498,13 @@ function parseHoldings(
       const isRetirementAsset = ['EPF', 'PPF', 'NPS'].includes(assetType)
       const effectiveBroker = broker && broker.toLowerCase() !== 'n/a' && broker !== '-' 
         ? broker 
-        : (isRetirementAsset ? assetType : '')
+        : (isRetirementAsset ? assetType : 'Unknown')
 
-      // Validate Broker for non-retirement assets
-      if (!effectiveBroker && !isRetirementAsset) {
+      // Skip if broker column doesn't exist and it's not a retirement asset
+      if (columnMap.broker === -1 && !isRetirementAsset) {
         skipped.push({
           row: i + 1,
-          reason: 'Missing or invalid broker information',
+          reason: 'Broker column not found in file',
           data: { investment, assetType }
         })
         continue
