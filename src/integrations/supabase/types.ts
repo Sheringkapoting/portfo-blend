@@ -304,6 +304,337 @@ export type Database = {
         }
         Relationships: []
       }
+      mf_cas_sync: {
+        Row: {
+          created_at: string
+          email: string | null
+          error_message: string | null
+          id: string
+          last_synced_at: string | null
+          nickname: string | null
+          otp_method: string | null
+          otp_reference: string | null
+          pan: string
+          phone: string | null
+          sync_status: string
+          time_period: string | null
+          updated_at: string
+          updated_till: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          last_synced_at?: string | null
+          nickname?: string | null
+          otp_method?: string | null
+          otp_reference?: string | null
+          pan: string
+          phone?: string | null
+          sync_status: string
+          time_period?: string | null
+          updated_at?: string
+          updated_till?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          last_synced_at?: string | null
+          nickname?: string | null
+          otp_method?: string | null
+          otp_reference?: string | null
+          pan?: string
+          phone?: string | null
+          sync_status?: string
+          time_period?: string | null
+          updated_at?: string
+          updated_till?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      mf_folios: {
+        Row: {
+          advisor: string | null
+          amc_code: string | null
+          amc_name: string
+          created_at: string
+          folio_number: string
+          id: string
+          isin: string | null
+          pan: string
+          registrar: string | null
+          scheme_code: string | null
+          scheme_name: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          advisor?: string | null
+          amc_code?: string | null
+          amc_name: string
+          created_at?: string
+          folio_number: string
+          id?: string
+          isin?: string | null
+          pan: string
+          registrar?: string | null
+          scheme_code?: string | null
+          scheme_name: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          advisor?: string | null
+          amc_code?: string | null
+          amc_name?: string
+          created_at?: string
+          folio_number?: string
+          id?: string
+          isin?: string | null
+          pan?: string
+          registrar?: string | null
+          scheme_code?: string | null
+          scheme_name?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      mf_holdings_summary: {
+        Row: {
+          absolute_return: number | null
+          absolute_return_percent: number | null
+          amc_name: string
+          avg_nav: number | null
+          created_at: string
+          current_nav: number | null
+          current_value: number | null
+          first_investment_date: string | null
+          folio_id: string | null
+          folio_number: string
+          id: string
+          invested_value: number | null
+          isin: string | null
+          last_transaction_date: string | null
+          pan: string
+          scheme_code: string | null
+          scheme_name: string
+          total_dividend_amount: number | null
+          total_purchase_units: number | null
+          total_redemption_units: number | null
+          total_units: number
+          updated_at: string
+          user_id: string | null
+          xirr: number | null
+        }
+        Insert: {
+          absolute_return?: number | null
+          absolute_return_percent?: number | null
+          amc_name: string
+          avg_nav?: number | null
+          created_at?: string
+          current_nav?: number | null
+          current_value?: number | null
+          first_investment_date?: string | null
+          folio_id?: string | null
+          folio_number: string
+          id?: string
+          invested_value?: number | null
+          isin?: string | null
+          last_transaction_date?: string | null
+          pan: string
+          scheme_code?: string | null
+          scheme_name: string
+          total_dividend_amount?: number | null
+          total_purchase_units?: number | null
+          total_redemption_units?: number | null
+          total_units: number
+          updated_at?: string
+          user_id?: string | null
+          xirr?: number | null
+        }
+        Update: {
+          absolute_return?: number | null
+          absolute_return_percent?: number | null
+          amc_name?: string
+          avg_nav?: number | null
+          created_at?: string
+          current_nav?: number | null
+          current_value?: number | null
+          first_investment_date?: string | null
+          folio_id?: string | null
+          folio_number?: string
+          id?: string
+          invested_value?: number | null
+          isin?: string | null
+          last_transaction_date?: string | null
+          pan?: string
+          scheme_code?: string | null
+          scheme_name?: string
+          total_dividend_amount?: number | null
+          total_purchase_units?: number | null
+          total_redemption_units?: number | null
+          total_units?: number
+          updated_at?: string
+          user_id?: string | null
+          xirr?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mf_holdings_summary_folio_id_fkey"
+            columns: ["folio_id"]
+            isOneToOne: false
+            referencedRelation: "mf_folios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mf_schemes: {
+        Row: {
+          amc_code: string | null
+          amc_name: string
+          aum: number | null
+          category: string | null
+          created_at: string
+          current_nav: number | null
+          exit_load: string | null
+          expense_ratio: number | null
+          id: string
+          isin: string | null
+          lock_in_period: string | null
+          min_investment: number | null
+          min_sip_investment: number | null
+          nav_date: string | null
+          scheme_code: string
+          scheme_name: string
+          scheme_type: string | null
+          sub_category: string | null
+          updated_at: string
+        }
+        Insert: {
+          amc_code?: string | null
+          amc_name: string
+          aum?: number | null
+          category?: string | null
+          created_at?: string
+          current_nav?: number | null
+          exit_load?: string | null
+          expense_ratio?: number | null
+          id?: string
+          isin?: string | null
+          lock_in_period?: string | null
+          min_investment?: number | null
+          min_sip_investment?: number | null
+          nav_date?: string | null
+          scheme_code: string
+          scheme_name: string
+          scheme_type?: string | null
+          sub_category?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amc_code?: string | null
+          amc_name?: string
+          aum?: number | null
+          category?: string | null
+          created_at?: string
+          current_nav?: number | null
+          exit_load?: string | null
+          expense_ratio?: number | null
+          id?: string
+          isin?: string | null
+          lock_in_period?: string | null
+          min_investment?: number | null
+          min_sip_investment?: number | null
+          nav_date?: string | null
+          scheme_code?: string
+          scheme_name?: string
+          scheme_type?: string | null
+          sub_category?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      mf_transactions: {
+        Row: {
+          amc_name: string
+          amount: number | null
+          balance_units: number | null
+          created_at: string
+          description: string | null
+          dividend_rate: number | null
+          folio_id: string | null
+          folio_number: string
+          id: string
+          isin: string | null
+          nav: number | null
+          pan: string
+          scheme_code: string | null
+          scheme_name: string
+          transaction_date: string
+          transaction_type: string
+          units: number | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          amc_name: string
+          amount?: number | null
+          balance_units?: number | null
+          created_at?: string
+          description?: string | null
+          dividend_rate?: number | null
+          folio_id?: string | null
+          folio_number: string
+          id?: string
+          isin?: string | null
+          nav?: number | null
+          pan: string
+          scheme_code?: string | null
+          scheme_name: string
+          transaction_date: string
+          transaction_type: string
+          units?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          amc_name?: string
+          amount?: number | null
+          balance_units?: number | null
+          created_at?: string
+          description?: string | null
+          dividend_rate?: number | null
+          folio_id?: string | null
+          folio_number?: string
+          id?: string
+          isin?: string | null
+          nav?: number | null
+          pan?: string
+          scheme_code?: string | null
+          scheme_name?: string
+          transaction_date?: string
+          transaction_type?: string
+          units?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mf_transactions_folio_id_fkey"
+            columns: ["folio_id"]
+            isOneToOne: false
+            referencedRelation: "mf_folios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       kite_sessions_status: {
