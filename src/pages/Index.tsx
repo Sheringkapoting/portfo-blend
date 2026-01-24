@@ -9,7 +9,7 @@ import { AmountAllocationChart } from '@/components/portfolio/AmountAllocationCh
 import { DataSourcePanel } from '@/components/portfolio/DataSourcePanel';
 import { PortfolioAnalytics } from '@/components/portfolio/PortfolioAnalytics';
 import { CacheStatusBadge } from '@/components/portfolio/CacheStatusBadge';
-import { KiteLoginModal } from '@/components/portfolio/KiteLoginModal';
+import { EmptyState } from '@/components/portfolio/EmptyState';
 import { AIAssistantPanel } from '@/components/portfolio/AIAssistantPanel';
 import { AIInsightsCard } from '@/components/portfolio/AIInsightsCard';
 import { MFDashboard } from '@/components/mutualfund/MFDashboard';
@@ -78,9 +78,8 @@ const Index = () => {
   // Allocation view mode toggle
   const [allocationViewMode, setAllocationViewMode] = useState<'percent' | 'amount'>('percent');
 
-  // Check if we should show mandatory Kite login
-  const [showMandatoryLogin, setShowMandatoryLogin] = useState(false);
-  const [hasCheckedKiteOnce, setHasCheckedKiteOnce] = useState(false);
+  // Track if user is a first-time visitor (no holdings)
+  const [hasCheckedInitialState, setHasCheckedInitialState] = useState(false);
 
   // Handle OAuth redirect with new dedicated hook
   const { progress: oauthProgress } = useKiteOAuthHandler({
@@ -91,27 +90,19 @@ const Index = () => {
     refetchHoldings: refetch,
   });
 
+  // Redirect new users to Data Sources tab
   useEffect(() => {
-    // Only check once after initial load
-    if (!isKiteLoading && !isLoading && !hasCheckedKiteOnce) {
-      setHasCheckedKiteOnce(true);
-      // Show mandatory login if no valid session and no holdings
-      if (!isSessionValid && liveHoldings.length === 0) {
-        // Check if user just came back from Kite OAuth
+    if (!isLoading && !hasCheckedInitialState) {
+      setHasCheckedInitialState(true);
+      // If no holdings and not coming back from OAuth, show Data Sources tab
+      if (liveHoldings.length === 0) {
         const params = new URLSearchParams(window.location.search);
         if (!params.get('kite_connected')) {
-          setShowMandatoryLogin(true);
+          setActiveTab('sources');
         }
       }
     }
-  }, [isKiteLoading, isLoading, isSessionValid, liveHoldings.length, hasCheckedKiteOnce]);
-
-  // Hide modal when session becomes valid
-  useEffect(() => {
-    if (isSessionValid) {
-      setShowMandatoryLogin(false);
-    }
-  }, [isSessionValid]);
+  }, [isLoading, liveHoldings.length, hasCheckedInitialState]);
 
   // Use live holdings
   const enrichedHoldings = useMemo(() => {
@@ -177,15 +168,6 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mandatory Kite Login Modal */}
-      {showMandatoryLogin && (
-        <KiteLoginModal
-          loginUrl={loginUrl}
-          loginUrlError={loginUrlError}
-          isLoading={isKiteLoading}
-        />
-      )}
-
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="mb-6">
           <DashboardHeader 
@@ -249,97 +231,117 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="holdings" className="mt-6">
-            {/* View toggle */}
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-foreground">Portfolio Holdings</h2>
-              <ToggleGroup
-                type="single"
-                value={holdingsView}
-                onValueChange={(value) => value && setHoldingsView(value as 'tabbed' | 'flat')}
-                className="bg-muted/50 border border-border rounded-lg p-1"
-              >
-                <ToggleGroupItem value="tabbed" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
-                  <LayoutGrid className="h-4 w-4" />
-                  By Asset Class
-                </ToggleGroupItem>
-                <ToggleGroupItem value="flat" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
-                  <Briefcase className="h-4 w-4" />
-                  All Holdings
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </div>
-
-            {holdingsView === 'tabbed' ? (
-              <TabbedHoldings holdings={enrichedHoldings} />
+            {enrichedHoldings.length === 0 ? (
+              <EmptyState
+                title="No Holdings Found"
+                description="To view your portfolio holdings, please connect to a data source first. You can sync with Zerodha, upload INDMoney Excel files, or connect your mutual fund accounts."
+                onNavigateToSources={() => setActiveTab('sources')}
+              />
             ) : (
-              <HoldingsTable holdings={enrichedHoldings} />
+              <>
+                {/* View toggle */}
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold text-foreground">Portfolio Holdings</h2>
+                  <ToggleGroup
+                    type="single"
+                    value={holdingsView}
+                    onValueChange={(value) => value && setHoldingsView(value as 'tabbed' | 'flat')}
+                    className="bg-muted/50 border border-border rounded-lg p-1"
+                  >
+                    <ToggleGroupItem value="tabbed" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
+                      <LayoutGrid className="h-4 w-4" />
+                      By Asset Class
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="flat" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
+                      <Briefcase className="h-4 w-4" />
+                      All Holdings
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
+
+                {holdingsView === 'tabbed' ? (
+                  <TabbedHoldings holdings={enrichedHoldings} />
+                ) : (
+                  <HoldingsTable holdings={enrichedHoldings} />
+                )}
+              </>
             )}
           </TabsContent>
 
           <TabsContent value="allocation" className="mt-6 space-y-6">
-            {/* Toggle for view mode */}
-            <div className="flex items-center justify-end">
-              <ToggleGroup
-                type="single"
-                value={allocationViewMode}
-                onValueChange={(value) => value && setAllocationViewMode(value as 'percent' | 'amount')}
-                className="bg-muted/50 border border-border rounded-lg p-1"
-              >
-                <ToggleGroupItem value="percent" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
-                  Percentage (%)
-                </ToggleGroupItem>
-                <ToggleGroupItem value="amount" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
-                  Amount (₹)
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </div>
+            {enrichedHoldings.length === 0 ? (
+              <EmptyState
+                title="No Allocation Data"
+                description="Portfolio allocation charts will appear here once you sync your holdings from any data source."
+                onNavigateToSources={() => setActiveTab('sources')}
+              />
+            ) : (
+              <>
+                {/* Toggle for view mode */}
+                <div className="flex items-center justify-end">
+                  <ToggleGroup
+                    type="single"
+                    value={allocationViewMode}
+                    onValueChange={(value) => value && setAllocationViewMode(value as 'percent' | 'amount')}
+                    className="bg-muted/50 border border-border rounded-lg p-1"
+                  >
+                    <ToggleGroupItem value="percent" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
+                      Percentage (%)
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="amount" className="gap-2 px-3 py-1.5 text-sm data-[state=on]:bg-card">
+                      Amount (₹)
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </div>
 
-            {/* Allocation charts - shows either percentage or amount based on toggle */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {allocationViewMode === 'percent' ? (
-                <>
-                  <AllocationChart
-                    data={sectorAllocation}
-                    title="Sector Allocation"
-                    labelKey="sector"
-                    delay={0.1}
-                  />
-                  <AllocationChart
-                    data={typeAllocation}
-                    title="Asset Type Allocation"
-                    labelKey="type"
-                    delay={0.2}
-                  />
-                  <AllocationChart
-                    data={sourceAllocation}
-                    title="Source Allocation"
-                    labelKey="source"
-                    delay={0.3}
-                  />
-                </>
-              ) : (
-                <>
-                  <AmountAllocationChart
-                    data={sectorAllocation}
-                    title="Sector Value (₹)"
-                    labelKey="sector"
-                    delay={0.1}
-                  />
-                  <AmountAllocationChart
-                    data={typeAllocation}
-                    title="Asset Type Value (₹)"
-                    labelKey="type"
-                    delay={0.2}
-                  />
-                  <AmountAllocationChart
-                    data={sourceAllocation}
-                    title="Source Value (₹)"
-                    labelKey="source"
-                    delay={0.3}
-                  />
-                </>
-              )}
-            </div>
+                {/* Allocation charts - shows either percentage or amount based on toggle */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {allocationViewMode === 'percent' ? (
+                    <>
+                      <AllocationChart
+                        data={sectorAllocation}
+                        title="Sector Allocation"
+                        labelKey="sector"
+                        delay={0.1}
+                      />
+                      <AllocationChart
+                        data={typeAllocation}
+                        title="Asset Type Allocation"
+                        labelKey="type"
+                        delay={0.2}
+                      />
+                      <AllocationChart
+                        data={sourceAllocation}
+                        title="Source Allocation"
+                        labelKey="source"
+                        delay={0.3}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <AmountAllocationChart
+                        data={sectorAllocation}
+                        title="Sector Value (₹)"
+                        labelKey="sector"
+                        delay={0.1}
+                      />
+                      <AmountAllocationChart
+                        data={typeAllocation}
+                        title="Asset Type Value (₹)"
+                        labelKey="type"
+                        delay={0.2}
+                      />
+                      <AmountAllocationChart
+                        data={sourceAllocation}
+                        title="Source Value (₹)"
+                        labelKey="source"
+                        delay={0.3}
+                      />
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="mutualfunds" className="mt-6">
@@ -347,12 +349,20 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="analytics" className="mt-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <PortfolioAnalytics />
+            {enrichedHoldings.length === 0 ? (
+              <EmptyState
+                title="No Analytics Available"
+                description="Portfolio analytics and insights will be generated once you have synced your holdings."
+                onNavigateToSources={() => setActiveTab('sources')}
+              />
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2">
+                  <PortfolioAnalytics />
+                </div>
+                <AIInsightsCard holdings={enrichedHoldings} summary={summary} />
               </div>
-              <AIInsightsCard holdings={enrichedHoldings} summary={summary} />
-            </div>
+            )}
           </TabsContent>
 
           <TabsContent value="sources" className="mt-6">
@@ -372,7 +382,7 @@ const Index = () => {
           <p>
             {isLive 
               ? `Live data from ${sourceAllocation.map(s => s.source).join(' & ')} • Last synced: ${lastSync?.toLocaleDateString('en-IN')}`
-              : 'Sample data • Connect your Zerodha account in Data Sources tab'
+              : 'No data synced yet • Connect a data source to get started'
             }
           </p>
         </div>

@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { KiteConnectCard } from './KiteConnectCard';
 import { BrokerPlaceholderCard, AVAILABLE_BROKERS } from './BrokerPlaceholderCard';
-import { KiteLoginModal } from './KiteLoginModal';
 import { UploadProgressIndicator, UploadStep } from './UploadProgressIndicator';
 import { useKiteSession } from '@/hooks/useKiteSession';
 import { MFCASSyncPanel } from '@/components/mutualfund/MFCASSyncPanel';
@@ -29,7 +28,6 @@ interface DataSourcePanelProps {
   isSyncing: boolean;
   syncStatus: SyncStatus[];
   lastSync: Date | null;
-  showMandatoryKiteLogin?: boolean;
   syncProgress?: SyncProgress;
 }
 
@@ -39,7 +37,6 @@ export function DataSourcePanel({
   isSyncing,
   syncStatus,
   lastSync,
-  showMandatoryKiteLogin = false,
   syncProgress,
 }: DataSourcePanelProps) {
   const [dragActive, setDragActive] = useState(false);
@@ -47,10 +44,6 @@ export function DataSourcePanel({
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadedHoldingsCount, setUploadedHoldingsCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { isSessionValid, loginUrl, loginUrlError, isLoading: isKiteLoading } = useKiteSession();
-
-  // Check if we need to show the mandatory Kite login
-  const shouldShowKiteModal = showMandatoryKiteLogin && !isSessionValid && !isKiteLoading;
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -144,17 +137,7 @@ export function DataSourcePanel({
   const isUploading = uploadStep !== 'idle' && uploadStep !== 'complete' && uploadStep !== 'error';
 
   return (
-    <>
-      {/* Mandatory Kite Login Modal */}
-      {shouldShowKiteModal && (
-        <KiteLoginModal
-          loginUrl={loginUrl}
-          loginUrlError={loginUrlError}
-          isLoading={isKiteLoading}
-        />
-      )}
-
-      <motion.div
+    <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
@@ -289,7 +272,6 @@ export function DataSourcePanel({
           </div>
         </div>
       </motion.div>
-    </>
   );
 }
 
