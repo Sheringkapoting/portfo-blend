@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock, Building2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { KiteConnectCard } from './KiteConnectCard';
@@ -8,6 +8,7 @@ import { BrokerPlaceholderCard, AVAILABLE_BROKERS } from './BrokerPlaceholderCar
 import { KiteLoginModal } from './KiteLoginModal';
 import { UploadProgressIndicator, UploadStep } from './UploadProgressIndicator';
 import { useKiteSession } from '@/hooks/useKiteSession';
+import { MFCASSyncPanel } from '@/components/mutualfund/MFCASSyncPanel';
 
 interface SyncStatus {
   source: string;
@@ -174,7 +175,7 @@ export function DataSourcePanel({
         </div>
 
         {/* Active Brokers Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Zerodha Kite Connect Card */}
           <KiteConnectCard
             onSyncZerodha={onSyncZerodha}
@@ -264,6 +265,11 @@ export function DataSourcePanel({
               </div>
             </CardContent>
           </Card>
+
+          {/* Mutual Fund CAS Sync Card */}
+          <div className="md:col-span-2 lg:col-span-1">
+            <MFCASSyncPanel />
+          </div>
         </div>
 
         {/* Coming Soon Brokers */}
