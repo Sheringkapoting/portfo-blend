@@ -211,8 +211,9 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error in mf-cas-sync function:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
