@@ -102,9 +102,9 @@ export function MFCASSyncPanel() {
               <Building2 className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <CardTitle>Sync Mutual Funds via PAN</CardTitle>
+              <CardTitle>Sync Mutual Funds</CardTitle>
               <CardDescription>
-                Use MFCentral CAS API to sync all your Mutual Fund transactions across all platforms
+                Connect via MFCentral CAS API
               </CardDescription>
             </div>
           </div>
@@ -121,7 +121,7 @@ export function MFCASSyncPanel() {
                 <Label htmlFor="pan">PAN Number</Label>
                 <Input
                   id="pan"
-                  placeholder="BPNPS8605G"
+                  placeholder="ABCDE1234F"
                   value={pan}
                   onChange={(e) => setPan(e.target.value.toUpperCase())}
                   maxLength={10}
@@ -152,9 +152,9 @@ export function MFCASSyncPanel() {
               {otpMethod === 'phone' && (
                 <div className="space-y-2">
                   <Label htmlFor="phone-input">Phone Number</Label>
-                  <Input
+                <Input
                     id="phone-input"
-                    placeholder="9029156368"
+                    placeholder="Enter 10-digit mobile number"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     maxLength={10}
@@ -179,7 +179,7 @@ export function MFCASSyncPanel() {
                 <Label htmlFor="nickname">Add Nickname (Optional)</Label>
                 <Input
                   id="nickname"
-                  placeholder="MF Sunil"
+                  placeholder="My Portfolio"
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                 />
