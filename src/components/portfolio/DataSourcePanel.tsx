@@ -1,14 +1,13 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock, Building2 } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { KiteConnectCard } from './KiteConnectCard';
 import { BrokerPlaceholderCard, AVAILABLE_BROKERS } from './BrokerPlaceholderCard';
 import { UploadProgressIndicator, UploadStep } from './UploadProgressIndicator';
 import { useKiteSession } from '@/hooks/useKiteSession';
-import { MFCASSyncPanel } from '@/components/mutualfund/MFCASSyncPanel';
-
+import { MFCentralCard } from '@/components/mutualfund/MFCentralCard';
 interface SyncStatus {
   source: string;
   status: string;
@@ -250,9 +249,7 @@ export function DataSourcePanel({
           </Card>
 
           {/* Mutual Fund CAS Sync Card */}
-          <div className="md:col-span-2 lg:col-span-1">
-            <MFCASSyncPanel />
-          </div>
+          <MFCentralCard />
         </div>
 
         {/* Coming Soon Brokers */}
