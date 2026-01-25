@@ -366,7 +366,7 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
                       <li>Create a new app (₹2000/month subscription required)</li>
                       <li>Set Redirect URL to:<br/>
                         <code className="text-xs bg-muted px-1 py-0.5 rounded break-all">
-                          {import.meta.env.VITE_SUPABASE_URL}/functions/v1/kite-callback
+                          https://nlnevxvsgholniaeigst.supabase.co/functions/v1/kite-callback
                         </code>
                       </li>
                       <li>Copy your API Key and API Secret</li>
