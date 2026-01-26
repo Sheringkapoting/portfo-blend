@@ -17,26 +17,40 @@ Deno.serve(async (req) => {
     const appUrl = Deno.env.get('APP_URL') || 'https://portfo-blend.lovable.app'
     
     // Parse state to extract user_id for secure OAuth flow
-    let userId: string | null = null
-    if (stateParam) {
-      try {
-        const decoded = atob(stateParam)
-        console.log('[kite-callback] Decoded state:', decoded)
-        const stateData = JSON.parse(decoded)
-        userId = stateData.user_id || null
-        
-        // Validate state timestamp (reject if older than 10 minutes)
-        const stateAge = Date.now() - (stateData.timestamp || 0)
-        if (stateAge > 10 * 60 * 1000) {
-          console.warn('[kite-callback] OAuth state expired, age:', stateAge)
-          // Don't reject - just log, we'll try to use it anyway for UX
-        }
-        console.log('[kite-callback] Extracted user_id from state:', userId)
-      } catch (e) {
-        console.error('[kite-callback] Failed to parse OAuth state:', e, 'stateParam:', stateParam)
+    // SECURITY: State parameter is REQUIRED - reject if missing or invalid
+    let userId: string
+    
+    if (!stateParam) {
+      console.error('[kite-callback] Missing state parameter - OAuth flow compromised')
+      throw new Error('OAuth state missing. Please restart the login process.')
+    }
+    
+    try {
+      const decoded = atob(stateParam)
+      console.log('[kite-callback] Decoded state:', decoded)
+      const stateData = JSON.parse(decoded)
+      
+      // SECURITY: user_id is REQUIRED
+      if (!stateData.user_id) {
+        console.error('[kite-callback] Invalid state - missing user_id')
+        throw new Error('Invalid OAuth state. Please restart the login process.')
       }
-    } else {
-      console.log('[kite-callback] No state parameter in URL')
+      userId = stateData.user_id
+      
+      // SECURITY: Enforce state timestamp validation (reject if older than 10 minutes)
+      const stateAge = Date.now() - (stateData.timestamp || 0)
+      if (stateAge > 10 * 60 * 1000) {
+        console.error('[kite-callback] OAuth state expired, age:', stateAge)
+        throw new Error('OAuth session expired. Please restart the login process.')
+      }
+      
+      console.log('[kite-callback] Validated user_id from state:', userId)
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('OAuth')) {
+        throw e // Re-throw our own errors
+      }
+      console.error('[kite-callback] Failed to parse OAuth state:', e, 'stateParam:', stateParam)
+      throw new Error('Invalid OAuth state. Please restart the login process.')
     }
     
     if (!requestToken) {
@@ -193,24 +207,24 @@ Deno.serve(async (req) => {
     expiresAt.setHours(expiresAt.getHours() + 8) // Conservative 8 hour expiry
 
     // Delete old sessions for this user and insert new one
-    if (userId) {
-      const { error: deleteError } = await supabase.from('kite_sessions').delete().eq('user_id', userId)
-      if (deleteError) {
-        console.error('[kite-callback] Delete user sessions error:', deleteError)
-      }
+    // SECURITY: userId is guaranteed to be set at this point
+    const { error: deleteError } = await supabase.from('kite_sessions').delete().eq('user_id', userId)
+    if (deleteError) {
+      console.error('[kite-callback] Delete user sessions error:', deleteError)
     }
     
-    // Also clean up orphan sessions older than 1 hour
+    // Clean up any orphan sessions (legacy cleanup for security)
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
     await supabase.from('kite_sessions')
       .delete()
       .is('user_id', null)
       .lt('created_at', oneHourAgo)
     
-    const sessionData: { access_token: string; expires_at: string; user_id: string | null } = {
+    // SECURITY: user_id is now guaranteed to be set (non-null) due to validation above
+    const sessionData: { access_token: string; expires_at: string; user_id: string } = {
       access_token: accessToken,
       expires_at: expiresAt.toISOString(),
-      user_id: userId, // Always set, even if null
+      user_id: userId, // Always non-null after validation
     }
     
     console.log('[kite-callback] Inserting session with user_id:', userId)
@@ -228,38 +242,35 @@ Deno.serve(async (req) => {
     await supabase.from('sync_logs').insert({
       source: 'Zerodha',
       status: 'connected',
-      user_id: userId || null,
+      user_id: userId,
       holdings_count: 0,
     })
 
-    // Trigger immediate sync of holdings (only if we have a user_id)
-    if (userId) {
-      try {
-        // Get user's JWT for the sync call by creating a service-level auth
-        const syncResponse = await fetch(`${supabaseUrl}/functions/v1/zerodha-sync`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${supabaseKey}`,
-            'Content-Type': 'application/json',
-          },
-        })
-        if (syncResponse.ok) {
-          const syncResult = await syncResponse.json()
-          console.log('[kite-callback] Holdings sync triggered successfully:', syncResult)
-        } else {
-          const syncError = await syncResponse.text()
-          console.error('[kite-callback] Holdings sync trigger failed:', syncError)
-        }
-      } catch (syncError) {
-        console.error('[kite-callback] Failed to trigger holdings sync:', syncError)
+    // Trigger immediate sync of holdings
+    // SECURITY: userId is always set at this point
+    try {
+      // Get user's JWT for the sync call by creating a service-level auth
+      const syncResponse = await fetch(`${supabaseUrl}/functions/v1/zerodha-sync`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+      })
+      if (syncResponse.ok) {
+        const syncResult = await syncResponse.json()
+        console.log('[kite-callback] Holdings sync triggered successfully:', syncResult)
+      } else {
+        const syncError = await syncResponse.text()
+        console.error('[kite-callback] Holdings sync trigger failed:', syncError)
       }
-    } else {
-      console.log('[kite-callback] Skipping sync trigger - no user_id in session')
+    } catch (syncError) {
+      console.error('[kite-callback] Failed to trigger holdings sync:', syncError)
     }
 
     // For POST requests (from the HTML page's fetch), return JSON success
     if (req.method === 'POST') {
-      return new Response(JSON.stringify({ success: true, userId: userId || null }), {
+      return new Response(JSON.stringify({ success: true, userId: userId }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
