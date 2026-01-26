@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Info, CheckCircle2, RefreshCw, Clock, RotateCcw } from 'lucide-react';
+import { Building2, Info, CheckCircle2, RefreshCw, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,26 +13,13 @@ export function MFCentralCard() {
     latestSync,
     isLoadingSync,
     mfHoldings,
-    refetchHoldings,
   } = useMFCASSync();
 
   const [showModal, setShowModal] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isCompleted = latestSync?.sync_status === 'completed';
   const isSynced = isCompleted && mfHoldings.length > 0;
-
-  const handleRefreshData = async () => {
-    setIsRefreshing(true);
-    try {
-      await refetchHoldings();
-    } catch (error) {
-      console.error('Failed to refresh MF data:', error);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
 
   if (isLoadingSync) {
     return (
@@ -83,29 +70,14 @@ export function MFCentralCard() {
                   </div>
                 )}
               </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => setShowModal(true)}
-                  className="flex-1 bg-primary hover:bg-primary/90"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Sync Again
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleRefreshData}
-                  disabled={isRefreshing}
-                  title="Refresh Mutual Funds data"
-                  className="shrink-0"
-                >
-                  {isRefreshing ? (
-                    <RotateCcw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RotateCcw className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
+              
+              <Button
+                onClick={() => setShowModal(true)}
+                className="w-full bg-primary hover:bg-primary/90"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sync Again
+              </Button>
             </>
           ) : (
             <>

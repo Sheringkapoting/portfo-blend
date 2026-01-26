@@ -43,11 +43,11 @@ Deno.serve(async (req) => {
     }
 
     // Try to get access token from stored session
-    // SECURITY: Only get user-specific session - no orphan claiming allowed
+    // Only get user-specific session - no cross-user fallback for security
     let accessToken = ''
     let finalSession = null
     
-    // Get user-specific session only - no fallback to orphan sessions
+    // Get user-specific session only
     if (authResult.userId) {
       const { data: userSession } = await supabase
         .from('kite_sessions')
@@ -59,12 +59,42 @@ Deno.serve(async (req) => {
       
       if (userSession && new Date(userSession.expires_at) > new Date()) {
         finalSession = userSession
-        accessToken = finalSession.access_token
-        console.log('Using session:', finalSession.id, 'expires:', finalSession.expires_at)
       }
     }
     
-    // SECURITY: Removed orphan session claiming - sessions must be properly attributed during OAuth callback
+    // Check for orphan sessions (user_id is null) only during OAuth callback recovery
+    // This allows the first sync after OAuth to claim the session
+    if (!finalSession && authResult.userId) {
+      const { data: orphanSession } = await supabase
+        .from('kite_sessions')
+        .select('*')
+        .is('user_id', null)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      
+      if (orphanSession) {
+        // Claim this orphan session for the current user
+        const { error: updateError } = await supabase
+          .from('kite_sessions')
+          .update({ user_id: authResult.userId })
+          .eq('id', orphanSession.id)
+          .is('user_id', null) // Extra safety: only update if still null
+        
+        if (!updateError) {
+          finalSession = { ...orphanSession, user_id: authResult.userId }
+          console.log('Claimed orphan session for user:', authResult.userId)
+        } else {
+          console.error('Failed to claim orphan session:', updateError)
+        }
+      }
+    }
+
+    if (finalSession) {
+      accessToken = finalSession.access_token
+      console.log('Using session:', finalSession.id, 'expires:', finalSession.expires_at)
+    }
     
     if (!accessToken) {
       throw new Error('No valid Kite session. Please connect your Zerodha account.')
