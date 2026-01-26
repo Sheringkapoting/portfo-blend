@@ -55,9 +55,11 @@ export function useKiteLoginUrl() {
         return;
       }
 
-      // Create state parameter with user_id for secure OAuth flow
+      // Create state parameter with user_id and app_url for secure OAuth flow
+      const appUrl = window.location.origin; // Captures current environment (localhost or production)
       const stateData = {
         user_id: user.id,
+        app_url: appUrl,
         nonce: crypto.randomUUID(),
         timestamp: Date.now()
       };

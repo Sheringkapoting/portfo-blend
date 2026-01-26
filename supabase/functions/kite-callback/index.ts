@@ -14,16 +14,22 @@ Deno.serve(async (req) => {
     const url = new URL(req.url)
     const requestToken = url.searchParams.get('request_token')
     const stateParam = url.searchParams.get('state')
-    const appUrl = Deno.env.get('APP_URL') || 'https://portfo-blend.lovable.app'
     
-    // Parse state to extract user_id for secure OAuth flow
+    // Parse state to extract user_id and app_url for secure OAuth flow
     let userId: string | null = null
+    let appUrl = Deno.env.get('APP_URL') || 'https://portfo-blend.lovable.app'
     if (stateParam) {
       try {
         const decoded = atob(stateParam)
         console.log('[kite-callback] Decoded state:', decoded)
         const stateData = JSON.parse(decoded)
         userId = stateData.user_id || null
+        
+        // Extract app_url from state if available
+        if (stateData.app_url) {
+          appUrl = stateData.app_url
+          console.log('[kite-callback] Using app_url from state:', appUrl)
+        }
         
         // Validate state timestamp (reject if older than 10 minutes)
         const stateAge = Date.now() - (stateData.timestamp || 0)
@@ -225,6 +231,7 @@ Deno.serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('[kite-callback] Error:', errorMessage)
 
+    // Use default app URL for error redirects
     const appUrl = Deno.env.get('APP_URL') || 'https://portfo-blend.lovable.app'
 
     // Redirect with error
