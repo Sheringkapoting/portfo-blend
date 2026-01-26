@@ -50,31 +50,22 @@ serve(async (req) => {
     const MF_CENTRAL_API_URL = Deno.env.get('MF_CENTRAL_API_URL') || 'https://api.mfcentral.com/cas';
     const MF_CENTRAL_API_KEY = Deno.env.get('MF_CENTRAL_API_KEY') || '';
 
+  // Check if we're in demo mode (no real API configured)
+    const isDemoMode = !MF_CENTRAL_API_KEY || MF_CENTRAL_API_URL === 'https://api.mfcentral.com/cas';
+    
     let response;
 
     switch (action) {
       case 'request_otp': {
-        // Step 1: Request OTP from MFCentral
-        const otpResponse = await fetch(`${MF_CENTRAL_API_URL}/request-otp`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${MF_CENTRAL_API_KEY}`,
-          },
-          body: JSON.stringify({
-            pan: pan.toUpperCase(),
-            [otp_method === 'phone' ? 'mobile' : 'email']: otp_method === 'phone' ? phone : email,
-            otp_method,
-          }),
-        });
-
-        if (!otpResponse.ok) {
-          throw new Error('Failed to request OTP from MFCentral');
+        // Generate a mock OTP reference for demo mode
+        const mockOtpReference = `DEMO_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        
+        if (!isDemoMode) {
+          // Real API call would go here when MFCentral API is available
+          throw new Error('MFCentral API integration not configured. Please use demo mode or upload CAS PDF.');
         }
 
-        const otpData = await otpResponse.json();
-
-        // Store sync request in database
+        // Store sync request in database (demo mode)
         const { data: syncRecord, error: syncError } = await supabaseClient
           .from('mf_cas_sync')
           .insert({
@@ -83,7 +74,7 @@ serve(async (req) => {
             phone: otp_method === 'phone' ? phone : null,
             email: otp_method === 'email' ? email : null,
             otp_method,
-            otp_reference: otpData.reference_id || otpData.otp_reference,
+            otp_reference: mockOtpReference,
             sync_status: 'otp_sent',
             time_period,
             updated_till,
@@ -96,44 +87,36 @@ serve(async (req) => {
           throw syncError;
         }
 
+        console.log(`[DEMO MODE] OTP sent to ${otp_method === 'phone' ? phone : email} for PAN ${pan.toUpperCase()}`);
+
         response = {
           success: true,
-          message: 'OTP sent successfully',
+          message: isDemoMode 
+            ? 'Demo mode: Use OTP "123456" to verify' 
+            : 'OTP sent successfully',
           sync_id: syncRecord.id,
-          otp_reference: otpData.reference_id || otpData.otp_reference,
+          otp_reference: mockOtpReference,
+          otp_method,
+          demo_mode: isDemoMode,
         };
         break;
       }
 
       case 'verify_otp': {
-        // Step 2: Verify OTP and get CAS data
-        const verifyResponse = await fetch(`${MF_CENTRAL_API_URL}/verify-otp`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${MF_CENTRAL_API_KEY}`,
-          },
-          body: JSON.stringify({
-            pan: pan.toUpperCase(),
-            otp,
-            reference_id: otp_reference,
-          }),
-        });
+        if (isDemoMode) {
+          // In demo mode, accept "123456" as valid OTP
+          if (otp !== '123456') {
+            await supabaseClient
+              .from('mf_cas_sync')
+              .update({
+                sync_status: 'failed',
+                error_message: 'Invalid OTP. Use "123456" in demo mode.',
+              })
+              .eq('otp_reference', otp_reference);
 
-        if (!verifyResponse.ok) {
-          // Update sync status to failed
-          await supabaseClient
-            .from('mf_cas_sync')
-            .update({
-              sync_status: 'failed',
-              error_message: 'Invalid OTP',
-            })
-            .eq('otp_reference', otp_reference);
-
-          throw new Error('Invalid OTP');
+            throw new Error('Invalid OTP. In demo mode, use "123456"');
+          }
         }
-
-        const verifyData = await verifyResponse.json();
 
         // Update sync status to verified
         await supabaseClient
@@ -143,36 +126,17 @@ serve(async (req) => {
           })
           .eq('otp_reference', otp_reference);
 
+        console.log(`[DEMO MODE] OTP verified for reference ${otp_reference}`);
+
         response = {
           success: true,
           message: 'OTP verified successfully',
-          access_token: verifyData.access_token,
+          demo_mode: isDemoMode,
         };
         break;
       }
 
       case 'fetch_cas': {
-        // Step 3: Fetch CAS data
-        const casResponse = await fetch(`${MF_CENTRAL_API_URL}/fetch-cas`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${MF_CENTRAL_API_KEY}`,
-          },
-          body: JSON.stringify({
-            pan: pan.toUpperCase(),
-            reference_id: otp_reference,
-            time_period,
-            updated_till,
-          }),
-        });
-
-        if (!casResponse.ok) {
-          throw new Error('Failed to fetch CAS data');
-        }
-
-        const casData = await casResponse.json();
-
         // Update sync status to syncing
         await supabaseClient
           .from('mf_cas_sync')
@@ -181,23 +145,33 @@ serve(async (req) => {
           })
           .eq('otp_reference', otp_reference);
 
-        // Process and store CAS data
-        await processCASData(supabaseClient, user.id, pan.toUpperCase(), casData);
+        if (isDemoMode) {
+          // Generate demo CAS data
+          const demoCASData = generateDemoCASData(pan.toUpperCase());
+          
+          // Process and store demo CAS data
+          await processCASData(supabaseClient, user.id, pan.toUpperCase(), demoCASData);
 
-        // Update sync status to completed
-        await supabaseClient
-          .from('mf_cas_sync')
-          .update({
-            sync_status: 'completed',
-            last_synced_at: new Date().toISOString(),
-          })
-          .eq('otp_reference', otp_reference);
+          // Update sync status to completed
+          await supabaseClient
+            .from('mf_cas_sync')
+            .update({
+              sync_status: 'completed',
+              last_synced_at: new Date().toISOString(),
+            })
+            .eq('otp_reference', otp_reference);
 
-        response = {
-          success: true,
-          message: 'CAS data synced successfully',
-          holdings_count: casData.folios?.length || 0,
-        };
+          console.log(`[DEMO MODE] Synced ${demoCASData.folios.length} demo folios for PAN ${pan.toUpperCase()}`);
+
+          response = {
+            success: true,
+            message: 'Demo data synced successfully',
+            holdings_count: demoCASData.folios.length,
+            demo_mode: true,
+          };
+        } else {
+          throw new Error('MFCentral API integration not configured');
+        }
         break;
       }
 
@@ -221,6 +195,61 @@ serve(async (req) => {
     );
   }
 });
+
+// Generate demo CAS data for testing
+function generateDemoCASData(pan: string) {
+  const demoFolios = [
+    {
+      folio_number: `${pan.substring(0, 5)}001`,
+      amc_name: 'HDFC Mutual Fund',
+      amc_code: 'HDFC',
+      scheme_name: 'HDFC Flexi Cap Fund - Direct Plan - Growth',
+      scheme_code: 'HDFC-FLEX-DG',
+      isin: 'INF179K01VV2',
+      advisor: 'Direct',
+      registrar: 'CAMS',
+      current_nav: 1856.45,
+      transactions: [
+        { date: '2023-01-15', type: 'purchase', amount: 50000, units: 28.54, nav: 1752.12, balance_units: 28.54, description: 'SIP' },
+        { date: '2023-06-15', type: 'purchase', amount: 50000, units: 27.12, nav: 1843.89, balance_units: 55.66, description: 'SIP' },
+        { date: '2024-01-15', type: 'purchase', amount: 50000, units: 26.95, nav: 1855.29, balance_units: 82.61, description: 'SIP' },
+      ],
+    },
+    {
+      folio_number: `${pan.substring(0, 5)}002`,
+      amc_name: 'Parag Parikh Mutual Fund',
+      amc_code: 'PPFAS',
+      scheme_name: 'Parag Parikh Flexi Cap Fund - Direct Plan - Growth',
+      scheme_code: 'PPFAS-FLEX-DG',
+      isin: 'INF879O01027',
+      advisor: 'Direct',
+      registrar: 'KFintech',
+      current_nav: 78.92,
+      transactions: [
+        { date: '2022-06-10', type: 'purchase', amount: 100000, units: 1428.57, nav: 70.00, balance_units: 1428.57, description: 'Lumpsum' },
+        { date: '2023-12-10', type: 'purchase', amount: 50000, units: 657.89, nav: 76.00, balance_units: 2086.46, description: 'Additional' },
+      ],
+    },
+    {
+      folio_number: `${pan.substring(0, 5)}003`,
+      amc_name: 'Mirae Asset Mutual Fund',
+      amc_code: 'MIRAE',
+      scheme_name: 'Mirae Asset Large Cap Fund - Direct Plan - Growth',
+      scheme_code: 'MIRAE-LC-DG',
+      isin: 'INF769K01101',
+      advisor: 'Direct',
+      registrar: 'CAMS',
+      current_nav: 112.34,
+      transactions: [
+        { date: '2021-03-20', type: 'purchase', amount: 200000, units: 2040.82, nav: 98.00, balance_units: 2040.82, description: 'Lumpsum' },
+        { date: '2022-03-20', type: 'purchase', amount: 100000, units: 943.40, nav: 106.00, balance_units: 2984.22, description: 'Additional' },
+        { date: '2023-09-15', type: 'dividend', amount: 5000, units: 0, nav: 110.50, balance_units: 2984.22, description: 'Dividend Payout' },
+      ],
+    },
+  ];
+
+  return { folios: demoFolios };
+}
 
 async function processCASData(supabaseClient: any, userId: string, pan: string, casData: any) {
   // Parse and store folio data
