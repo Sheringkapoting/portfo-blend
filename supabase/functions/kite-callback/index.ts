@@ -39,7 +39,9 @@ Deno.serve(async (req) => {
       console.log('[kite-callback] No state parameter in URL')
     }
     
-    if (!requestToken) {
+    // For GET requests, always return the HTML page that will handle the OAuth flow
+    // The HTML page will then POST to this endpoint with the request_token
+    if (req.method === 'GET') {
       // Return HTML that will handle the OAuth callback
       // This page extracts request_token and state from URL and POSTs to this endpoint
       return new Response(`
@@ -140,6 +142,13 @@ Deno.serve(async (req) => {
 
     // POST request handling - token exchange
     console.log('[kite-callback] Processing token exchange, userId from state:', userId)
+    
+    if (!requestToken) {
+      return new Response(JSON.stringify({ success: false, error: 'Missing request_token' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
     
     const apiKey = Deno.env.get('KITE_API_KEY')
     const apiSecret = Deno.env.get('KITE_API_SECRET')
