@@ -71,31 +71,32 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
       return;
     }
 
+    let urlToUse = loginUrl;
+
     // If we don't have a login URL yet, fetch it first
-    if (!loginUrl && !isFetchingLoginUrl) {
+    if (!urlToUse && !isFetchingLoginUrl) {
       setIsFetchingLoginUrl(true);
       try {
-        await fetchLoginUrl();
-        // The loginUrl state will be updated by the hook
-        // We'll need to wait for the next render to use it
+        const fetchedUrl = await fetchLoginUrl();
+        urlToUse = fetchedUrl;
       } catch (error) {
         console.error('[KiteConnect] Failed to fetch login URL:', error);
         toast.error('Configuration Error', {
           description: 'Zerodha integration is not properly configured. Please contact support.',
         });
-      } finally {
         setIsFetchingLoginUrl(false);
+        return;
       }
-      return;
+      setIsFetchingLoginUrl(false);
     }
 
-    if (loginUrl) {
+    if (urlToUse) {
       setIsAuthRedirecting(true);
       
       // Extract state from login URL and store in sessionStorage as fallback
       // In case Zerodha doesn't preserve the state parameter in redirect
       try {
-        const url = new URL(loginUrl);
+        const url = new URL(urlToUse);
         const state = url.searchParams.get('state');
         if (state) {
           sessionStorage.setItem('kite_oauth_state', state);
@@ -105,7 +106,7 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
         console.error('[KiteConnect] Failed to parse login URL:', e);
       }
       
-      window.location.href = loginUrl;
+      window.location.href = urlToUse;
     }
   };
 

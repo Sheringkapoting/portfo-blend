@@ -19,7 +19,7 @@ interface UseKiteSessionReturn {
   loginUrl: string | null;
   loginUrlError: string | null;
   refetch: () => Promise<KiteSession | null>;
-  fetchLoginUrl: () => Promise<void>;
+  fetchLoginUrl: () => Promise<string | null>;
   disconnectSession: () => Promise<boolean>;
   isDisconnecting: boolean;
   sessionExpiresIn: string | null;
@@ -83,7 +83,7 @@ export function useKiteSession(): UseKiteSessionReturn {
     }
   }, []);
 
-  const fetchLoginUrl = useCallback(async () => {
+  const fetchLoginUrl = useCallback(async (): Promise<string | null> => {
     try {
       // First, verify the user is authenticated
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -91,7 +91,7 @@ export function useKiteSession(): UseKiteSessionReturn {
       if (userError || !user) {
         console.log('[useKiteSession] User not authenticated, cannot fetch login URL');
         setLoginUrlError('Please log in to your account first.');
-        return;
+        return null;
       }
 
       // Refresh the session to get a fresh JWT token
@@ -102,7 +102,7 @@ export function useKiteSession(): UseKiteSessionReturn {
       if (refreshError || !session || !session.access_token) {
         console.error('[useKiteSession] Failed to refresh session:', refreshError);
         setLoginUrlError('Session expired. Please log out and log in again.');
-        return;
+        return null;
       }
 
       console.log('[useKiteSession] Session refreshed successfully. Fetching login URL for user:', user.id);
@@ -129,13 +129,14 @@ export function useKiteSession(): UseKiteSessionReturn {
         } else {
           setLoginUrlError('Failed to get login URL. Check API key configuration.');
         }
-        return;
+        return null;
       }
       
       if (response.data?.loginUrl) {
         setLoginUrl(response.data.loginUrl);
         setLoginUrlError(null);
         console.log('[useKiteSession] Login URL fetched successfully');
+        return response.data.loginUrl;
       } else if (response.data?.error) {
         console.error('[useKiteSession] Edge Function returned error:', response.data.error);
         setLoginUrlError(response.data.error);
@@ -143,6 +144,7 @@ export function useKiteSession(): UseKiteSessionReturn {
         console.error('[useKiteSession] Unexpected response format:', response.data);
         setLoginUrlError('Unexpected response from server.');
       }
+      return null;
     } catch (e: any) {
       console.error('[useKiteSession] Exception fetching login URL:', e);
       if (e.message?.includes('401') || e.message?.includes('JWT')) {
@@ -150,6 +152,7 @@ export function useKiteSession(): UseKiteSessionReturn {
       } else {
         setLoginUrlError('Failed to connect to server.');
       }
+      return null;
     }
   }, []);
 
