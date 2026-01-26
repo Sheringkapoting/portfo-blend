@@ -49,6 +49,7 @@ Deno.serve(async (req) => {
 <html>
 <head>
   <title>Kite Login</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'unsafe-inline'">
   <style>
     body { 
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -79,6 +80,16 @@ Deno.serve(async (req) => {
     <p>Connecting to Zerodha...</p>
   </div>
   <script>
+    // Remove any potential sandbox restrictions
+    if (window.top !== window.self) {
+      // If we're in an iframe, try to break out
+      try {
+        window.top.location.href = window.location.href;
+      } catch (e) {
+        // If we can't break out, continue in the iframe
+      }
+    }
+    
     function showError(message) {
       const container = document.querySelector('.container');
       container.innerHTML = '';
