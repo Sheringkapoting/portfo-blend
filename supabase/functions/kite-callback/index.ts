@@ -49,7 +49,6 @@ Deno.serve(async (req) => {
 <html>
 <head>
   <title>Kite Login</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; script-src 'unsafe-inline'">
   <style>
     body { 
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
