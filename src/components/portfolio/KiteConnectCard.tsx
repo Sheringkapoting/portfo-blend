@@ -5,11 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { useKiteSession } from '@/hooks/useKiteSession';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { OAuthProgressIndicator } from './OAuthProgressIndicator';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -119,17 +119,6 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
     }
   };
 
-  // Calculate progress percentage for sync steps
-  const getProgressValue = () => {
-    switch (syncProgress?.step) {
-      case 'connecting': return 25;
-      case 'verifying': return 50;
-      case 'syncing': return 75;
-      case 'complete': return 100;
-      default: return 0;
-    }
-  };
-
   if (isLoading) {
     return (
       <Card className="border-border bg-card/50 backdrop-blur-sm">
@@ -143,7 +132,7 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
     );
   }
 
-  const showProgressIndicator = syncProgress && syncProgress.step !== 'idle' && syncProgress.step !== 'error';
+  const showProgressIndicator = syncProgress && syncProgress.step !== 'idle';
 
   return (
     <Card className="border-border bg-card/50 backdrop-blur-sm">
@@ -168,19 +157,12 @@ export function KiteConnectCard({ onSyncZerodha, isSyncing, zerodhaStatus, syncP
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Sync Progress Indicator */}
+        {/* Enhanced OAuth Progress Indicator */}
         {showProgressIndicator && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-2"
-          >
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">{syncProgress.message}</span>
-              <span className="text-muted-foreground">{getProgressValue()}%</span>
-            </div>
-            <Progress value={getProgressValue()} className="h-2" />
-          </motion.div>
+          <OAuthProgressIndicator 
+            step={syncProgress.step} 
+            message={syncProgress.message} 
+          />
         )}
 
         {isSessionValid ? (
