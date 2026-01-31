@@ -177,6 +177,7 @@ Deno.serve(async (req) => {
                 'Authorization': `Bearer ${supabaseKey}`,
                 'Content-Type': 'application/json',
               },
+              body: JSON.stringify({ user_id: userId }), // Pass userId for internal calls
             })
             if (syncResponse.ok) {
               const syncResult = await syncResponse.json()

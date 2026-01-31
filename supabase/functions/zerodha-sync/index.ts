@@ -42,17 +42,31 @@ Deno.serve(async (req) => {
       throw new Error('Kite API key not configured')
     }
 
+    // For internal/service calls (from kite-callback), get userId from request body
+    let effectiveUserId = authResult.userId
+    if (authResult.isCronCall && !effectiveUserId) {
+      try {
+        const body = await req.clone().json()
+        if (body?.user_id) {
+          effectiveUserId = body.user_id
+          console.log('Using user_id from request body for internal call:', effectiveUserId)
+        }
+      } catch {
+        // No body or invalid JSON, continue without userId
+      }
+    }
+
     // Try to get access token from stored session
     // Only get user-specific session - no cross-user fallback for security
     let accessToken = ''
     let finalSession = null
     
     // Get user-specific session only
-    if (authResult.userId) {
+    if (effectiveUserId) {
       const { data: userSession } = await supabase
         .from('kite_sessions')
         .select('*')
-        .eq('user_id', authResult.userId)
+        .eq('user_id', effectiveUserId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -64,7 +78,7 @@ Deno.serve(async (req) => {
     
     // Check for orphan sessions (user_id is null) only during OAuth callback recovery
     // This allows the first sync after OAuth to claim the session
-    if (!finalSession && authResult.userId) {
+    if (!finalSession && effectiveUserId) {
       const { data: orphanSession } = await supabase
         .from('kite_sessions')
         .select('*')
@@ -78,13 +92,13 @@ Deno.serve(async (req) => {
         // Claim this orphan session for the current user
         const { error: updateError } = await supabase
           .from('kite_sessions')
-          .update({ user_id: authResult.userId })
+          .update({ user_id: effectiveUserId })
           .eq('id', orphanSession.id)
           .is('user_id', null) // Extra safety: only update if still null
         
         if (!updateError) {
-          finalSession = { ...orphanSession, user_id: authResult.userId }
-          console.log('Claimed orphan session for user:', authResult.userId)
+          finalSession = { ...orphanSession, user_id: effectiveUserId }
+          console.log('Claimed orphan session for user:', effectiveUserId)
         } else {
           console.error('Failed to claim orphan session:', updateError)
         }
@@ -141,18 +155,18 @@ Deno.serve(async (req) => {
       exchange: h.exchange,
       source: 'Zerodha',
       isin: h.isin,
-      user_id: authResult.userId || null,
+      user_id: effectiveUserId || null,
     }))
 
     // Delete existing Zerodha holdings for this user and insert new ones
     // Build delete query properly - need to await properly with correct chaining
-    if (authResult.userId) {
+    if (effectiveUserId) {
       // Delete only this user's Zerodha holdings
       const { error: deleteError } = await supabase
         .from('holdings')
         .delete()
         .eq('source', 'Zerodha')
-        .eq('user_id', authResult.userId)
+        .eq('user_id', effectiveUserId)
       
       if (deleteError) {
         console.error('Delete error:', deleteError)
@@ -180,7 +194,7 @@ Deno.serve(async (req) => {
       source: 'Zerodha',
       status: 'success',
       holdings_count: holdings.length,
-      user_id: authResult.userId || null,
+      user_id: effectiveUserId || null,
     })
 
     // Fetch quotes for all symbols
